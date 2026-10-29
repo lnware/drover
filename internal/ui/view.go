@@ -18,9 +18,30 @@ const (
 	paneChrome = 4
 )
 
+const (
+	// The list is 30% of the window, but never narrower than minListWidth nor
+	// wider than listWidthCap; the cap is what a 256-column laptop screen
+	// reaches. Past wideFrom columns it keeps growing, by a quarter of every
+	// extra column, so a wide screen does not strand it at the left edge with
+	// all the new room going to the agent. maxListWidth stops that.
+	minListWidth = 26
+	listWidthCap = 46
+	wideFrom     = 256
+	maxListWidth = 90
+)
+
+// listWidth is the width of the list for a window total columns wide.
+func listWidth(total int) int {
+	w := min(max(total*3/10, minListWidth), listWidthCap)
+	if total > wideFrom {
+		w += (total - wideFrom) / 4
+	}
+	return min(w, maxListWidth)
+}
+
 // geometry splits the screen: left list, one separator column, right pane.
 func (m Model) geometry() (leftW, rightW, bodyH int) {
-	leftW = min(max(m.width*3/10, 30), 46)
+	leftW = listWidth(m.width)
 	return leftW, m.width - leftW - 1, m.height - 2 // title bar and footer
 }
 
