@@ -42,6 +42,7 @@ notify = false         # desktop notification when an unfocused agent needs you
 resume_args = ""       # appended by `v`; defaults to --continue when agent_cmd is claude
 icons = "unicode"      # or "nerd" for the Nerd Font branch glyph in the git bar
 theme = "jetbrains"    # or "catppuccin" (mocha), "catppuccin-macchiato", "catppuccin-frappe"
+background = true     # paint the list, title bar and footer in the theme colour
 mouse = true           # click and wheel support; false leaves the mouse to the terminal
 zoom_key = "ctrl+z"    # focus mode: zoom the pane to the whole terminal, and back
 terminal_cmd = ""      # `T`: defaults to $SHELL
@@ -155,8 +156,11 @@ full screen: a real tmux attach with no capture in between.
 
 `theme` picks the palette: `jetbrains` (the default, from a Helix theme),
 `catppuccin-mocha` (also `catppuccin`), `catppuccin-macchiato` or
-`catppuccin-frappe`. drover colours text but does not paint the background, so
-pair it with your terminal's matching theme. Every palette is tested for
+`catppuccin-frappe`. By default drover paints the title bar, the list and the
+footer in the theme's background, so a terminal background image or opacity
+does not show through them; the agent pane keeps your terminal's background.
+`background = false` leaves everything unpainted. Pair the theme with your
+terminal's matching one. Every palette is tested for
 contrast on the background and on the selected row, with 256-colour fallbacks
 for terminals without truecolor.
 

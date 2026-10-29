@@ -39,6 +39,10 @@ type Config struct {
 	// key on every keyboard layout. Bubble Tea key names ("ctrl+z", "f10",
 	// "alt+z"); ctrl+\ and ctrl+q are taken by "leave focus".
 	ZoomKey string `toml:"zoom_key"`
+	// Background paints the title bar, the list and the footer in the theme's
+	// background, so a terminal background image or opacity does not show
+	// through them. The pane that shows an agent is never painted.
+	Background bool `toml:"background"`
 	// Mouse turns on click and wheel support. Capturing the mouse stops the
 	// terminal's own text selection (kitty: hold shift to select anyway).
 	Mouse bool `toml:"mouse"`
@@ -51,7 +55,7 @@ type Config struct {
 }
 
 func Default() Config {
-	return Config{AgentCmd: "claude", Socket: "drover", Icons: "unicode", Mouse: true, ZoomKey: DefaultZoomKey}
+	return Config{AgentCmd: "claude", Socket: "drover", Icons: "unicode", Background: true, Mouse: true, ZoomKey: DefaultZoomKey}
 }
 
 func Path() string {
@@ -108,6 +112,7 @@ const template = `# drover configuration. See the README for every key.
 # projects = ["~/dev/work/project"]
 # theme = "jetbrains"   # or "catppuccin", "catppuccin-macchiato", "catppuccin-frappe"
 # icons = "unicode"     # or "nerd"
+# background = true     # paint the list, title bar and footer in the theme colour
 # agent_cmd = "claude"
 `
 

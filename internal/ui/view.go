@@ -84,14 +84,15 @@ func (m Model) render() string {
 	right := m.rightLines(rightW, bodyH)
 	sep := sepStyle.Render("│")
 
+	bg := m.chromeBackground()
 	var b strings.Builder
-	b.WriteString(m.titleBar() + "\n")
+	b.WriteString(paintBackground(m.titleBar(), bg) + "\n")
 	for i := 0; i < bodyH; i++ {
 		// The reset after each right line stops pane colors bleeding into
-		// the next row; it adds no width.
-		b.WriteString(fit(left[i], leftW) + sep + fit(right[i], rightW) + "\x1b[0m\n")
+		// the next row; it adds no width. The pane itself stays unpainted.
+		b.WriteString(paintBackground(fit(left[i], leftW)+sep, bg) + fit(right[i], rightW) + "\x1b[0m\n")
 	}
-	b.WriteString(m.footer())
+	b.WriteString(paintBackground(m.footer(), bg))
 	if m.popup.open {
 		return m.overlayPopup(b.String())
 	}

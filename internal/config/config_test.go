@@ -124,3 +124,20 @@ func TestEnsureFileCreatesOnceAndNeverOverwrites(t *testing.T) {
 		t.Errorf("an existing file was overwritten: %q", b)
 	}
 }
+
+func TestBackgroundDefaultsOnAndCanBeSwitchedOff(t *testing.T) {
+	if !Default().Background {
+		t.Error("the chrome background defaults to on")
+	}
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("background = false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Background {
+		t.Error("background = false was ignored")
+	}
+}
