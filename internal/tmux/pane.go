@@ -1,6 +1,7 @@
 package tmux
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -81,6 +82,22 @@ func literalArg(s string) string {
 		return s[:len(s)-1] + `\;`
 	}
 	return s
+}
+
+// SendBytes writes raw bytes to a pane as if its terminal had sent them, which
+// is how a terminal's replies to a program's queries arrive. target is a tmux
+// target such as a pane id ("%3"). Unlike SendText the bytes are not typed:
+// they go through send-keys -H, so control characters survive.
+func (d Driver) SendBytes(target string, b []byte) error {
+	if len(b) == 0 {
+		return nil
+	}
+	args := []string{"send-keys", "-t", target, "-H"}
+	for _, c := range b {
+		args = append(args, fmt.Sprintf("%02x", c))
+	}
+	_, err := d.run(args...)
+	return err
 }
 
 // SendText types text literally, so it is never read as key names.

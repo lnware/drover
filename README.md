@@ -118,6 +118,11 @@ worktree's directory, shown as child rows under it; each is its own tmux
 session and persists like an agent. `G` opens lazygit as a popup that exists
 only while open. `d` and `M` refuse while anything runs in the worktree.
 
+A pane drover shows has no outer terminal behind it. Programs that ask for one
+through tmux passthrough (yazi does, to detect terminal features) would wait for
+an answer that never comes, so drover answers the device-attributes query for
+the companion you are focused on. Without that, yazi takes five seconds to quit.
+
 **Search.** `/` matches every word you type against the label, branch, project,
 session name and state. Labels set with `r` are stored in
 `~/.local/state/drover/aliases.json`.
