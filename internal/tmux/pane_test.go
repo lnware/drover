@@ -125,3 +125,19 @@ func TestSemicolonKeyNamesAndPastesSurvive(t *testing.T) {
 	}
 	waitFor(t, d2, "p", "first;second;")
 }
+
+// Claude Code reads this option and prints a warning when it is off; the
+// private server never loads a tmux.conf, so drover has to set it.
+func TestServerEnablesFocusEvents(t *testing.T) {
+	d := testDriver(t)
+	if err := d.Spawn("f", t.TempDir(), "cat"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.run("show-options", "-gv", "focus-events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(got) != "on" {
+		t.Errorf("focus-events = %q, want on", strings.TrimSpace(got))
+	}
+}

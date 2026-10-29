@@ -105,6 +105,11 @@ func (d Driver) configureArgs() []string {
 	return []string{
 		"set-option", "-g", "prefix", d.Prefix, ";",
 		"set-option", "-g", "escape-time", "0", ";",
+		// Programs inside check this option and nag about it when it is off
+		// (Claude Code does), and the user's tmux.conf cannot reach this
+		// server. Focus events themselves only flow to a pane through an
+		// attached client, so this mainly serves A.
+		"set-option", "-g", "focus-events", "on", ";",
 		"set-option", "-g", "history-limit", strconv.Itoa(HistoryLimit), ";",
 		"set-option", "-g", "status-style", "bg=colour60,fg=colour255", ";",
 		"set-option", "-g", "status-left", " drover | #S ", ";",
