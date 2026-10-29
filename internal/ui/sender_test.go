@@ -71,7 +71,31 @@ func TestTypedPushesTheEchoWithoutWaitingForAPoll(t *testing.T) {
 	t.Fatalf("no echo capture showed the typed text; got %d messages", len(c.all()))
 }
 
+// A burst of keys costs one capture sequence, not one per key: the echo loop
+// restarts its timer whenever another key arrives within the echo waits. The
+// sends here are instant on purpose. A real tmux send-keys is a process spawn,
+// and when that takes longer than the first echo wait the next key cannot
+// arrive in time, so how many captures a real burst costs depends on how fast
+// the machine starts processes, which is no property of the code.
 func TestBurstOfTypingCoalescesIntoFewCaptures(t *testing.T) {
+	d := echoDriver(t)
+	s := newSender()
+	c := &collector{}
+	s.notify = c.send
+
+	for i := 0; i < 40; i++ {
+		s.typed(d, "s", func() {})
+	}
+	time.Sleep(400 * time.Millisecond)
+	// One sequence is a capture per echo wait.
+	if n := len(c.all()); n == 0 || n > len(echoWaits)+1 {
+		t.Errorf("40 keystrokes produced %d echo captures, want at most %d (each capture is a tmux process)", n, len(echoWaits)+1)
+	}
+}
+
+// The text of a burst of real keystrokes reaches the pane and is pushed to the
+// UI, whatever the speed of the machine.
+func TestBurstOfRealKeystrokesIsPushedToTheUI(t *testing.T) {
 	d := echoDriver(t)
 	s := newSender()
 	c := &collector{}
@@ -80,14 +104,16 @@ func TestBurstOfTypingCoalescesIntoFewCaptures(t *testing.T) {
 	for i := 0; i < 40; i++ {
 		s.typed(d, "s", func() { _ = d.SendText("s", "x") })
 	}
-	time.Sleep(400 * time.Millisecond)
-	if n := len(c.all()); n == 0 || n > 12 {
-		t.Errorf("40 keystrokes produced %d echo captures, want a handful (each capture is a tmux process)", n)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, e := range c.all() {
+			if strings.Count(strings.Join(e.cap.Lines, ""), "x") >= 40 {
+				return
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
-	last := c.all()[len(c.all())-1]
-	if got := strings.Count(strings.Join(last.cap.Lines, ""), "x"); got < 40 {
-		t.Errorf("the last capture shows %d of 40 keystrokes", got)
-	}
+	t.Fatalf("no capture ever showed all 40 keystrokes; %d captures were pushed", len(c.all()))
 }
 
 func TestEchoWithoutProgramIsHarmless(t *testing.T) {
