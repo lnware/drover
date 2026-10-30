@@ -90,8 +90,11 @@ func (m Model) switchKeyPressed(key string) (step, jump int, ok bool) {
 // once, the switch key opens the overlay on the next (or previous) stop.
 func (m Model) switchView(step, jump int) (tea.Model, tea.Cmd) {
 	r, ok := m.selected()
-	if !ok || m.hdr != "" {
-		return m, nil
+	if !ok { // on a header: the switcher opens where the cursor is
+		if jump >= 0 {
+			return m, nil
+		}
+		return m.openSwitcherAtHeader()
 	}
 	all := m.switchTargets(r, false)
 	if jump >= 0 {
@@ -221,14 +224,48 @@ func (m Model) switchItems() []switchItem {
 	})
 }
 
+// openSwitcherAtHeader opens the popup on the scope the cursor's header
+// stands for: Projects on a project or an org, Worktrees on a group, with the
+// choice on that header's own entry.
+func (m Model) openSwitcherAtHeader() (tea.Model, tea.Cmd) {
+	it, ok := m.selectedHeader()
+	if !ok {
+		return m, nil
+	}
+	m.switchBack, m.switchFilter = m.mode, ""
+	m.switchScope = scopeProjects
+	if it.kind == itemGroup {
+		m.switchScope = scopeWorktrees
+	}
+	m.mode = modeSwitch
+	m.switchSel = 0
+	for i, entry := range m.switchItems() {
+		var here bool
+		for _, r := range m.all {
+			if r.session != entry.row {
+				continue
+			}
+			switch it.kind {
+			case itemGroup:
+				here = groupID(r) == m.hdr
+			case itemProject:
+				here = projectID(r) == m.hdr
+			default:
+				here = orgID(r) == m.hdr
+			}
+		}
+		if here {
+			m.switchSel = i
+			break
+		}
+	}
+	return m, nil
+}
+
 // handleSwitchKey drives the open popup. ← and → change the scope; the switch
 // key and ↑/↓ move the choice; enter picks; esc leaves. Nothing reaches the
 // pane. Views are also picked by number, the other scopes filter on typing.
 func (m Model) handleSwitchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if _, ok := m.selected(); !ok {
-		m.mode = m.switchBack
-		return m, nil
-	}
 	items := m.switchItems()
 	key := msg.String()
 	move := func(d int) {
@@ -347,9 +384,6 @@ func (m Model) goToWorktree(session string) (tea.Model, tea.Cmd) {
 // the scope tabs, a filter line for the long scopes, the items with the choice
 // marked, and a line of keys. spliceBox puts it over the frame.
 func (m Model) switcherBox() []string {
-	if _, ok := m.selected(); !ok {
-		return nil
-	}
 	items := m.switchItems()
 	var tabs []string
 	for i, n := range scopeNames {
@@ -374,7 +408,11 @@ func (m Model) switcherBox() []string {
 		rows = append(rows, line)
 	}
 	if len(items) == 0 {
-		rows = append(rows, " "+dimStyle.Render("nothing matches"))
+		msg := "nothing matches"
+		if _, ok := m.selected(); !ok && m.switchScope == scopeViews {
+			msg = "select a worktree to see its views"
+		}
+		rows = append(rows, " "+dimStyle.Render(msg))
 	}
 	keys := " ←/→ scope · " + m.switchKey() + "/↑↓ choose · enter go · esc"
 	if m.switchScope == scopeViews {

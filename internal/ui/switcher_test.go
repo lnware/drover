@@ -236,3 +236,67 @@ func TestSwitcherProjectsScopeAndWrapping(t *testing.T) {
 		t.Errorf("esc closes the popup where it was: mode %d sel %q", m.mode, m.selSession)
 	}
 }
+
+// The popup opens on the scope the cursor stands for: Projects on a project
+// header (or an org), Worktrees on a group, Views on a worktree.
+func TestSwitcherOpensOnTheScopeOfTheCursor(t *testing.T) {
+	m := switcherScopeModel(t)
+	itemOf := func(kind itemKind, id string) item {
+		for _, it := range m.items() {
+			if it.kind == kind && (id == "" || it.id == id) {
+				return it
+			}
+		}
+		t.Fatalf("no item of kind %d %q", kind, id)
+		return item{}
+	}
+	f12 := tea.KeyPressMsg{Code: tea.KeyF12}
+
+	// a project header: Projects, with that project chosen
+	m.moveTo(itemOf(itemProject, "p:Acme/platform"))
+	opened := switcherPress(t, m, f12)
+	if opened.mode != modeSwitch || opened.switchScope != scopeProjects {
+		t.Fatalf("on a project the switcher opens on Projects: mode %d scope %d", opened.mode, opened.switchScope)
+	}
+	if got := opened.switchItems()[opened.switchSel].text; got != "Acme/platform" {
+		t.Errorf("the project under the cursor is chosen, got %q", got)
+	}
+	if shown := ansi.Strip(opened.render()); !strings.Contains(shown, "▸ Acme/platform") {
+		t.Errorf("the popup marks it:\n%s", shown)
+	}
+	// choosing another project goes there, though the cursor was on a header
+	picked := switcherPress(t, opened, tea.KeyPressMsg{Code: tea.KeyDown}, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if picked.mode != modeList || picked.hdr != "" || picked.selSession != "tools/main" {
+		t.Errorf("enter goes to the project's worktree: mode %d hdr %q sel %q", picked.mode, picked.hdr, picked.selSession)
+	}
+
+	// an org band behaves like its project
+	m.moveTo(itemOf(itemOrg, "o:Globex"))
+	if o := switcherPress(t, m, f12); o.switchScope != scopeProjects || o.switchItems()[o.switchSel].text != "Globex/tools" {
+		t.Errorf("an org opens Projects on its first project: scope %d", o.switchScope)
+	}
+
+	// a group header: Worktrees, on that group's first worktree
+	m.moveTo(itemOf(itemGroup, "g:Acme/platform/feature"))
+	g := switcherPress(t, m, f12)
+	if g.switchScope != scopeWorktrees || g.switchItems()[g.switchSel].row != "platform/feature/platform-01" {
+		t.Errorf("a group opens Worktrees on its first worktree: scope %d sel %+v", g.switchScope, g.switchItems()[g.switchSel])
+	}
+
+	// the Views scope has nothing to show on a header, and says so
+	v := switcherPress(t, g, tea.KeyPressMsg{Code: tea.KeyRight}, tea.KeyPressMsg{Code: tea.KeyRight})
+	if v.switchScope != scopeViews || len(v.switchItems()) != 0 || !strings.Contains(ansi.Strip(v.render()), "select a worktree") {
+		t.Errorf("views on a header: scope %d, %d items", v.switchScope, len(v.switchItems()))
+	}
+
+	// on a worktree it is still the Views (the behaviour that was there before)
+	m.moveTo(item{kind: itemWorktree, id: m.rows[1].session, row: 1})
+	if w := switcherPress(t, m, f12); w.switchScope != scopeViews {
+		t.Errorf("on a worktree the switcher opens on Views: scope %d", w.switchScope)
+	}
+	// a number key does nothing on a header
+	m.moveTo(itemOf(itemProject, "p:Acme/platform"))
+	if n := switcherPress(t, m, tea.KeyPressMsg{Code: tea.KeyF1}); n.mode != modeList || n.hdr == "" {
+		t.Errorf("f1 on a header must do nothing: mode %d hdr %q", n.mode, n.hdr)
+	}
+}

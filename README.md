@@ -175,7 +175,9 @@ full screen: a real tmux attach with no capture in between.
 over the worktree's views (its agents, then terminal and editor), starting on the
 next one; `F12` again moves on, `enter` or a number goes there, `esc` cancels.
 `F1`-`F9` jump to the nth view at once, and the pane header numbers them.
-In the popup `←`/`→` change the scope: **Views** (this worktree's agents,
+The popup opens on the scope the cursor is on: **Views** on a worktree,
+**Worktrees** on a group header, **Projects** on a project or org header, with
+that header's own entry chosen. In it `←`/`→` change the scope: **Views** (this worktree's agents,
 terminal and editor, picked by number), **Worktrees** (every worktree of every
 project, those needing attention first; type to filter) and **Projects** (type to
 filter; `enter` goes to the project's first worktree). Going to a worktree
