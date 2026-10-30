@@ -87,7 +87,7 @@ func TestSearchMatchesStateWordAliasAndAllTerms(t *testing.T) {
 
 func TestSelectionMovesWithFilterAndRestartsPreview(t *testing.T) {
 	m := testModel()
-	m.move(2) // past the feature header to feature/a (headers are selectable now)
+	m.move(3) // past main's agent row and the feature header to feature/a (headers are selectable)
 	if m.selSession != "infra/feature/a" {
 		t.Fatal("setup: selection not on feature/a")
 	}

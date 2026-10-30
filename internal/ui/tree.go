@@ -32,6 +32,9 @@ const (
 	itemProject
 	itemGroup
 	itemWorktree
+	// itemAgent is one of the worktree's agent sessions, running or not,
+	// shown as a child row under it (companion_tree.go).
+	itemAgent
 	// itemCompanion is a running terminal or editor, shown as a child row
 	// under its worktree (companion_tree.go).
 	itemCompanion
@@ -67,17 +70,22 @@ type item struct {
 	label string   // header text; empty for worktrees
 	root  string   // project root, for project and group headers
 	row   int      // index into m.rows for a worktree or its child, else -1
-	// view and last describe a companion child: which program, and whether it
-	// is the last child of its worktree (drawn with └ instead of ├).
-	view paneView
-	last bool
+	// view and last describe a child: which companion program (agent children
+	// have none), and whether it is the last child of its worktree (drawn with
+	// └ instead of ├). agent is the session of an agent child.
+	view  paneView
+	last  bool
+	agent string
 	// collapsed is the header's own fold; hidden says a header above it is
 	// collapsed, so it is not on screen.
 	collapsed, hidden bool
 	sum               tally // everything under a header
 }
 
-func (it item) isHeader() bool { return it.kind != itemWorktree && it.kind != itemCompanion }
+func (it item) isHeader() bool { return it.kind < itemWorktree }
+
+// isChild reports whether the item is a child row of a worktree.
+func (it item) isChild() bool { return it.kind == itemAgent || it.kind == itemCompanion }
 
 // parent is the id of the header directly above the item, or "".
 func (it item) parent() string {
@@ -164,7 +172,10 @@ func visibleItems(items []item) []item {
 }
 
 // stateOf is the agent state the tallies count; "" when nothing is known.
-func (m Model) stateOf(r row) (status.State, bool) { return m.agents[r.session].State, r.running }
+func (m Model) stateOf(r row) (status.State, bool) {
+	s, _ := m.worktreeState(r)
+	return s, r.running
+}
 
 // items is the full display list. A filter shows every match, folded or not.
 func (m Model) items() []item {
@@ -179,8 +190,11 @@ func (m Model) current(items []item) (item, bool) {
 			return item{}, false
 		}
 		id = m.rows[m.cursor].session
-		if m.sub != viewAgent {
+		switch {
+		case m.sub != viewAgent:
 			id = companionID(id, m.sub)
+		case m.subAgent != "":
+			id = agentItemID(m.subAgent)
 		}
 	}
 	i := slices.IndexFunc(items, func(it item) bool { return it.id == id })
@@ -212,10 +226,12 @@ func (m Model) selectedRoot() string {
 
 // moveTo puts the cursor on an item.
 func (m *Model) moveTo(it item) {
-	m.sub = viewAgent
+	m.sub, m.subAgent = viewAgent, ""
 	switch it.kind {
 	case itemWorktree:
 		m.hdr, m.cursor, m.selSession = "", it.row, it.id
+	case itemAgent:
+		m.hdr, m.cursor, m.selSession, m.subAgent = "", it.row, m.rows[it.row].session, it.agent
 	case itemCompanion:
 		m.hdr, m.cursor, m.selSession, m.sub = "", it.row, m.rows[it.row].session, it.view
 	default:
@@ -266,11 +282,19 @@ func (m *Model) reselect() {
 		return
 	}
 	it := byID[id]
-	if keepSub && m.sub != viewAgent {
-		// A companion that has ended is gone from the items: fall back to its
-		// worktree (the agent), which is what `it` already is.
-		if c, ok := byID[companionID(id, m.sub)]; ok {
-			it = c
+	if keepSub {
+		// A child that is gone from the items (a companion that ended, an
+		// agent that was forgotten) falls back to its worktree, which is what
+		// `it` already is.
+		switch {
+		case m.sub != viewAgent:
+			if c, ok := byID[companionID(id, m.sub)]; ok {
+				it = c
+			}
+		case m.subAgent != "":
+			if c, ok := byID[agentItemID(m.subAgent)]; ok {
+				it = c
+			}
 		}
 	}
 	if it.hidden {
@@ -325,7 +349,7 @@ func (m Model) foldMoved() (tea.Model, tea.Cmd) {
 // collapse folds the section the cursor is in: a worktree's group, a group's
 // project, a project's org. A top-level header folds itself.
 func (m Model) collapse() (tea.Model, tea.Cmd) {
-	if cur, ok := m.current(m.items()); ok && cur.kind == itemCompanion {
+	if cur, ok := m.current(m.items()); ok && cur.isChild() {
 		return m.toParent(cur) // tree semantics: left on a child goes up, it never folds
 	}
 	if m.filtering() {

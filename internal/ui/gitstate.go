@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/lnware/drover/internal/gitinfo"
+	"github.com/lnware/drover/internal/session"
 	"github.com/lnware/drover/internal/status"
 )
 
@@ -113,9 +114,12 @@ func (m Model) handleGitTick() (Model, tea.Cmd) {
 }
 
 // rowFor finds a worktree by session name.
-func (m Model) rowFor(session string) (row, bool) {
+// rowFor finds the worktree row of an agent session (or of a worktree's own
+// session key).
+func (m Model) rowFor(agentSession string) (row, bool) {
+	base, _, _ := session.Parse(agentSession)
 	for _, r := range m.all {
-		if r.session == session {
+		if r.session == base {
 			return r, true
 		}
 	}

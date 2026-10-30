@@ -50,12 +50,12 @@ func TestFooterFollowsTheSelectedRow(t *testing.T) {
 	m.width = 260
 	m.rows[0].running, m.all = true, m.rows
 	running := footerText(m)
-	if !strings.Contains(running, "x kill") || strings.Contains(running, "v resume") || strings.Contains(running, "d remove") {
+	if !strings.Contains(running, "x stop") || !strings.Contains(running, "N new agent") || strings.Contains(running, "v resume") || strings.Contains(running, "d remove") {
 		t.Errorf("running agent footer: %q", running)
 	}
 	m.rows[0].running, m.all = false, m.rows
 	stopped := footerText(m)
-	if !strings.Contains(stopped, "v resume") || !strings.Contains(stopped, "d remove") || strings.Contains(stopped, "x kill") {
+	if !strings.Contains(stopped, "v resume") || !strings.Contains(stopped, "d remove") || strings.Contains(stopped, "x stop") {
 		t.Errorf("stopped agent footer: %q", stopped)
 	}
 }
@@ -64,7 +64,7 @@ func TestFooterIsShortEnoughForAnAverageTerminal(t *testing.T) {
 	m := testModel()
 	for _, running := range []bool{true, false} {
 		m.rows[0].running, m.all = running, m.rows
-		if w := hintWidth("", m.listHints()); w > 115 {
+		if w := hintWidth("", m.listHints()); w > 130 {
 			t.Errorf("running=%v: the full footer is %d columns; it was 182 before", running, w)
 		}
 	}

@@ -16,28 +16,16 @@ type display struct {
 	style lipgloss.Style
 }
 
-// display resolves a row to what the user should see. A running session
-// with no hook data (started elsewhere, or hooks not installed) is shown as
-// plain "running" rather than guessed at.
+// display resolves a worktree row to what the user should see: its most
+// urgent running agent's look (agentDisplay), or an idle circle when none runs.
 func (m Model) display(r row) display {
 	if !r.running {
 		return display{glyph: "○", style: idleStyle}
 	}
-	e, ok := m.agents[r.session]
-	if !ok {
-		return display{glyph: "●", word: "running", style: dimStyle}
+	if s, ok := m.worktreeState(r); ok {
+		return stateDisplay(s)
 	}
-	switch e.State {
-	case status.Working:
-		return display{"●", "working", workingStyle}
-	case status.Waiting:
-		return display{"◆", "waiting", waitingStyle}
-	case status.Done:
-		return display{"✓", "done", doneStyle}
-	case status.Error:
-		return display{"✗", "error", errStyle}
-	}
-	return display{"●", "idle", runningStyle}
+	return display{glyph: "●", word: "running", style: dimStyle}
 }
 
 // age renders how long ago t was, coarsely: 8s, 3m, 2h, 4d.
@@ -54,18 +42,22 @@ func age(since time.Time, now time.Time) string {
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }
 
-// counts tallies sessions by display word for the title bar.
+// counts tallies agents by state for the title bar: every running agent
+// counts, so two agents in one worktree are two.
 func (m Model) counts() (working, waiting, running int) {
 	for _, r := range m.all {
-		if !r.running {
-			continue
-		}
-		running++
-		switch m.agents[r.session].State {
-		case status.Working:
-			working++
-		case status.Waiting:
-			waiting++
+		for _, a := range r.agentList() {
+			if !a.running {
+				continue
+			}
+			running++
+			s, _ := m.agentState(a)
+			switch s {
+			case status.Working:
+				working++
+			case status.Waiting:
+				waiting++
+			}
 		}
 	}
 	return working, waiting, running

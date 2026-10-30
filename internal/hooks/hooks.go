@@ -126,6 +126,10 @@ func Prepare(agentCmd, settingsPath string) (string, error) {
 	return cmd, nil
 }
 
+// Quote single-quotes s for sh, so a name with spaces or quotes is one word in
+// a command line.
+func Quote(s string) string { return shellQuote(s) }
+
 // shellQuote single-quotes s for sh, so install paths with spaces work.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"

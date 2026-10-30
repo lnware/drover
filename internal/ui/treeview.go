@@ -69,6 +69,9 @@ func (m Model) layout(w int) listLayout {
 		case itemWorktree:
 			l.add(m.renderRow(it.row, m.rows[it.row], w), i)
 			continue
+		case itemAgent:
+			l.add(m.renderAgent(it, selected, w), i)
+			continue
 		case itemCompanion:
 			l.add(m.renderChild(it, selected, w), i)
 			continue

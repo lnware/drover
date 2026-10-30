@@ -1,11 +1,7 @@
 package ui
 
 import (
-	"strings"
-
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/lnware/drover/internal/tmux"
 )
@@ -36,9 +32,10 @@ func (m Model) companionRunning(r row, v paneView) bool {
 	return m.companions[companionID(r.session, v)]
 }
 
-// withChildren inserts each worktree's running companions right after it. A
-// child inherits its worktree's folds (and so its filter membership: rows are
-// already filtered), because it takes the worktree's `up` and `hidden`.
+// withChildren inserts each worktree's agents, then its running companions,
+// right after it. A child inherits its worktree's folds (and so its filter
+// membership: rows are already filtered), because it takes the worktree's `up`
+// and `hidden`.
 func withChildren(items []item, rows []row, running func(row, paneView) bool) []item {
 	out := make([]item, 0, len(items)+4)
 	for _, it := range items {
@@ -46,17 +43,18 @@ func withChildren(items []item, rows []row, running func(row, paneView) bool) []
 		if it.kind != itemWorktree {
 			continue
 		}
-		var kids []paneView
+		var kids []item
+		for _, a := range rows[it.row].agentList() {
+			kids = append(kids, item{kind: itemAgent, id: agentItemID(a.session), agent: a.session})
+		}
 		for _, v := range companionViews {
 			if running(rows[it.row], v) {
-				kids = append(kids, v)
+				kids = append(kids, item{kind: itemCompanion, id: companionID(it.id, v), view: v})
 			}
 		}
-		for i, v := range kids {
-			out = append(out, item{
-				kind: itemCompanion, id: companionID(it.id, v), up: it.up, root: it.root,
-				row: it.row, hidden: it.hidden, view: v, last: i == len(kids)-1,
-			})
+		for i, k := range kids {
+			k.up, k.root, k.row, k.hidden, k.last = it.up, it.root, it.row, it.hidden, i == len(kids)-1
+			out = append(out, k)
 		}
 	}
 	return out
@@ -73,26 +71,12 @@ func (m Model) toParent(child item) (tea.Model, tea.Cmd) {
 // the worktree's status glyph, the label and a running dot. The selected one
 // takes the usual selected-row styling and the FOCUS badge.
 func (m Model) renderChild(it item, selected bool, w int) string {
-	plain := lipgloss.NewStyle()
-	paint := func(s lipgloss.Style) lipgloss.Style { return s }
-	if selected {
-		plain = selectedStyle
-		paint = func(s lipgloss.Style) lipgloss.Style { return s.Background(colSelected.color()) }
-	}
-	connector := "├"
-	if it.last {
-		connector = "└"
-	}
-	label := it.view.label()
-	left := lead(plain, selected, 5) + paint(sepStyle).Render(connector) + plain.Render(" "+label+" ") + paint(doneStyle).Render("●")
+	plain, paint := childStyles(selected)
+	left := lead(plain, selected, 5) + paint(sepStyle).Render(connector(it.last)) + plain.Render(" ") +
+		paint(doneStyle).Render(m.icons().icon(it.view)) + plain.Render(" "+it.view.label()+" ") + paint(doneStyle).Render("●")
 	right := ""
 	if selected && m.mode == modeFocus {
 		right = badgeStyle.Render(" FOCUS ")
 	}
-	pad := max(w-lipgloss.Width(left)-lipgloss.Width(right)-1, 1)
-	line := left + plain.Render(strings.Repeat(" ", pad)) + right + plain.Render(" ")
-	if lipgloss.Width(line) > w {
-		line = ansi.Truncate(line, w, "")
-	}
-	return line
+	return joinRow(left, right, plain, w)
 }

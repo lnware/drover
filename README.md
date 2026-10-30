@@ -61,7 +61,7 @@ Press `?` in drover for the full list. The main ones:
 | Key                 | Action                                                                 |
 | ------------------- | ---------------------------------------------------------------------- |
 | `↑/k` `↓/j`         | move                                                                   |
-| `enter`             | focus the agent, starting it if needed; on a header, fold or unfold it |
+| `enter`             | focus the agent; on a worktree with none, name and start one; on a stopped agent, resume it; on a header, fold it |
 | `←/h` `→/l`         | collapse / expand the section you are in                               |
 | `F`                 | fold every section, or unfold them all                                 |
 | `ctrl+\` / `ctrl+q` | leave focus mode (every other key goes to the pane)                    |
@@ -69,17 +69,18 @@ Press `?` in drover for the full list. The main ones:
 | `PgUp` / `PgDn`     | scroll the output back / forward (MacBook: `Fn+↑` / `Fn+↓`)            |
 | `End` / `q` / `esc` | back to live output while scrolled                                     |
 | `n`                 | new worktree: type `feature/my-change`, enter creates it               |
-| `v`                 | resume the last Claude conversation in this worktree                   |
+| `N`                 | new agent session in this worktree: asks for a name (empty: named after the branch) |
+| `v`                 | resume the stopped agent under the cursor with its own conversation    |
 | `d`                 | remove the worktree (press twice; the branch is kept)                  |
 | `/`                 | search; filters as you type, `enter` keeps it, `esc` clears            |
 | `w`                 | show only agents that are waiting, done or in error                    |
-| `r`                 | rename: a display label (git, folders and tmux are untouched)          |
+| `r`                 | rename an agent, or a worktree's display label (git and folders are untouched) |
 | `M`                 | rename the branch and move the folder (stopped sessions only)          |
 | `T` / `o`           | start a terminal / editor for this worktree                            |
 | `G`                 | lazygit in a popup over the screen                                     |
-| `a`                 | jump to the agent (the worktree row)                                   |
+| `a`                 | back to the agent from a terminal or editor row                        |
 | `A`                 | attach what the pane shows full screen; `C-a d` returns                |
-| `x` / `X`           | kill what the cursor is on / everything (`X` twice)                    |
+| `x` / `X`           | stop what the cursor is on (a stopped agent: forget it) / everything (`X` twice) |
 | `c` / `R`           | edit / reload the config                                               |
 | `q`                 | quit; sessions keep running                                            |
 
@@ -88,9 +89,24 @@ ones when the terminal is narrow.
 
 ## How it works
 
-**Sessions.** Each worktree gets one tmux session on a private server (socket
-`drover`, prefix `C-a`). Leave drover and the agents keep running. `drover
-stop` ends the server and every session on it.
+**Sessions.** A worktree can run several agents, each a tmux session on a
+private server (socket `drover`, prefix `C-a`) named `<project>/<branch>~<id>`.
+Leave drover and the agents keep running. `drover stop` ends the server and
+every session on it.
+
+Each agent is a row under its worktree, with an icon for the kind of session
+(`◈` agent, `$` terminal, `✎` editor; Nerd Font glyphs with `icons = "nerd"`),
+its name, and its state and age. `N` asks for a name; leave it empty and the
+session is named after the branch (`feature-a`, then `feature-a-2`, ...). A
+session is a small record in `~/.local/state/drover/sessions.json`: its id, its
+name and, for Claude, the conversation id. drover starts Claude with
+`--session-id <uuid> --name <name>`, so `x` stops an agent without losing its
+row, and `enter` or `v` on it brings it back with `--resume <uuid>`: that very
+conversation, not whichever ran last in the folder. `x` on a stopped agent
+forgets it. Removing a worktree forgets its sessions. The flags are added when
+`agent_cmd` starts with `claude`; other agents get the status hooks only. A
+session started by an earlier drover (named without an id) is adopted as an
+agent named after the branch.
 
 **Status.** Working / waiting / done comes from Claude Code hooks, with nothing
 to install: drover starts Claude as `claude --settings

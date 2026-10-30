@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/lnware/drover/internal/session"
+	"github.com/lnware/drover/internal/status"
 	"github.com/lnware/drover/internal/tmux"
 )
 
@@ -47,7 +49,10 @@ func sameCapture(a, b tmux.Capture) bool {
 }
 
 // sessionsMsg carries the live session names, read without touching git.
-type sessionsMsg struct{ live, companions []string }
+type sessionsMsg struct {
+	live, companions []string
+	recs             []session.Session
+}
 
 // refreshSessions updates only which worktrees have a running session.
 func (m Model) refreshSessions() tea.Cmd {
@@ -57,7 +62,7 @@ func (m Model) refreshSessions() tea.Cmd {
 		if err != nil {
 			return nil // keep what is shown; the next full refresh reports it
 		}
-		return sessionsMsg{live: live, companions: companions}
+		return sessionsMsg{live: live, companions: companions, recs: session.Load(session.Path(status.Root()))}
 	}
 }
 
@@ -65,7 +70,7 @@ func (m Model) handleSessions(msg sessionsMsg) Model {
 	all := make([]row, len(m.all))
 	copy(all, m.all)
 	for i := range all {
-		all[i].running = slices.Contains(msg.live, all[i].session)
+		all[i] = all[i].withAgents(buildAgents(all[i].session, all[i].wt.Branch, msg.recs, msg.live))
 	}
 	m.all = all
 	m.setCompanions(msg.companions)

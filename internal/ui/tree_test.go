@@ -62,10 +62,11 @@ func ids(items []item) []string {
 func TestBuildItemsOrderAndShape(t *testing.T) {
 	m := foldModel(t)
 	items := m.items()
+	// a running worktree is followed by its agent's child row ("a:" ids)
 	want := []string{
-		"o:Acme", "p:Acme/infra", "g:Acme/infra/base", "infra/main",
-		"g:Acme/infra/feature", "infra/a", "infra/b",
-		"p:Acme/platform", "g:Acme/platform/feature", "platform/internals",
+		"o:Acme", "p:Acme/infra", "g:Acme/infra/base", "infra/main", "a:infra/main",
+		"g:Acme/infra/feature", "infra/a", "a:infra/a", "infra/b",
+		"p:Acme/platform", "g:Acme/platform/feature", "platform/internals", "a:platform/internals",
 		"o:Globex", "p:Globex/tools", "g:Globex/tools/chore", "tools/scripts",
 	}
 	if got := ids(items); !slices.Equal(got, want) {
@@ -130,7 +131,7 @@ func TestBuildItemsHidesWhatFoldsCover(t *testing.T) {
 func TestBuildItemsWithoutOrgsStartsAtProject(t *testing.T) {
 	m := testModel() // org "" for both rows
 	items := m.items()
-	if got := ids(items); !slices.Equal(got, []string{"p:/infra", "g:/infra/base", "infra/main", "g:/infra/feature", "infra/feature/a"}) {
+	if got := ids(items); !slices.Equal(got, []string{"p:/infra", "g:/infra/base", "infra/main", "a:infra/main", "g:/infra/feature", "infra/feature/a"}) {
 		t.Errorf("items: %v", got)
 	}
 	if items[0].parent() != "" || items[1].parent() != "p:/infra" {
@@ -153,8 +154,8 @@ func onHeader(t *testing.T, m Model, id string) {
 
 func TestCollapseWalksUpAndExpandComesBack(t *testing.T) {
 	m := foldModel(t)
-	// from infra/main: the feature header, then infra/a
-	m, _ = press(t, m, keyRunes("j"), keyRunes("j"))
+	// from infra/main: its agent row, the feature header, then infra/a
+	m, _ = press(t, m, keyRunes("j"), keyRunes("j"), keyRunes("j"))
 	if m.selSession != "infra/a" || m.hdr != "" {
 		t.Fatalf("setup: %q %q", m.selSession, m.hdr)
 	}
@@ -242,7 +243,7 @@ func TestFilterShowsMatchesInsideFoldsAndFoldsReturn(t *testing.T) {
 	m, _ = press(t, m, keyRunes("F")) // everything folded
 	m, _ = press(t, m, keyRunes("/"), keyRunes("internals"))
 	got := ids(visibleItems(m.items()))
-	want := []string{"o:Acme", "p:Acme/platform", "g:Acme/platform/feature", "platform/internals"}
+	want := []string{"o:Acme", "p:Acme/platform", "g:Acme/platform/feature", "platform/internals", "a:platform/internals"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("a match inside a folded section must show: %v", got)
 	}

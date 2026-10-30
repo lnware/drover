@@ -102,15 +102,32 @@ func (m Model) listHints() []hint {
 	}
 	// The footer is for what you reach for every minute; the rarer keys
 	// (fold arrows, w, r, M, A, X) live on the ? screen.
-	if r, ok := m.selected(); ok && r.running {
+	r, ok := m.selected()
+	if ok {
+		if a, onChild := m.agentUnderCursor(r); onChild {
+			if a.running {
+				return []hint{
+					{"↑/↓", "move", 2}, {"enter", "focus", 1}, {"N", "new agent", 3}, {"x", "stop", 2},
+					{"r", "rename", 4}, {"T/o", "terminal/editor", 5}, {"G", "lazygit", 6},
+					hintHelp, hintQuit,
+				}
+			}
+			return []hint{
+				{"↑/↓", "move", 2}, {"enter", "resume", 1}, {"N", "new agent", 3}, {"x", "forget", 2},
+				{"r", "rename", 4}, {"T/o", "terminal/editor", 5},
+				hintHelp, hintQuit,
+			}
+		}
+	}
+	if ok && r.running {
 		return []hint{
-			{"↑/↓", "move", 2}, {"enter", "focus", 1}, {"n", "new", 4}, {"/", "search", 4},
-			{"T/o", "terminal/editor", 3}, {"G", "lazygit", 5}, {"x", "kill", 2},
+			{"↑/↓", "move", 2}, {"enter", "focus", 1}, {"N", "new agent", 3}, {"n", "new", 4}, {"/", "search", 4},
+			{"T/o", "terminal/editor", 3}, {"G", "lazygit", 5}, {"x", "stop", 2},
 			hintHelp, hintQuit,
 		}
 	}
 	return []hint{
-		{"↑/↓", "move", 2}, {"enter", "start", 1}, {"v", "resume", 2}, {"n", "new", 4},
+		{"↑/↓", "move", 2}, {"enter", "start", 1}, {"v", "resume", 2}, {"N", "new agent", 3}, {"n", "new", 4},
 		{"/", "search", 4}, {"T/o", "terminal/editor", 5}, {"d", "remove", 3},
 		hintHelp, hintQuit,
 	}

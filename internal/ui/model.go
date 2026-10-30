@@ -6,7 +6,6 @@ package ui
 import (
 	"errors"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -15,8 +14,8 @@ import (
 	"github.com/lnware/drover/internal/alias"
 	"github.com/lnware/drover/internal/config"
 	"github.com/lnware/drover/internal/gitinfo"
-	"github.com/lnware/drover/internal/hooks"
 	"github.com/lnware/drover/internal/notify"
+	"github.com/lnware/drover/internal/session"
 	"github.com/lnware/drover/internal/status"
 	"github.com/lnware/drover/internal/tmux"
 	"github.com/lnware/drover/internal/worktree"
@@ -42,6 +41,7 @@ const (
 	modeNew // typing the name of a new worktree
 	modeSearch
 	modeRename
+	modeNameAgent // typing the name of a new agent session (agent_actions.go)
 )
 
 type row struct {
@@ -50,7 +50,10 @@ type row struct {
 	root    string // project root holding .bare
 	wt      worktree.Worktree
 	session string
+	// running is whether any of the worktree's agents is; sess are the agents
+	// themselves (agents.go).
 	running bool
+	sess    []agent
 }
 
 // size is the pane geometry a session was last resized to.
@@ -107,7 +110,13 @@ type Model struct {
 	search        string
 	attention     bool
 	renameSession string
-	moveSession   string // worktree whose branch and folder the M prompt renames
+	// renameAgent is the agent session the rename prompt edits, "" when it
+	// edits a worktree's label; nameFor and nameContinuing belong to the new
+	// agent prompt.
+	renameAgent    string
+	nameFor        string
+	nameContinuing bool
+	moveSession    string // worktree whose branch and folder the M prompt renames
 
 	input   string
 	newRoot string
@@ -140,7 +149,11 @@ type Model struct {
 	// (viewAgent: the worktree row itself); the pane shown derives from it.
 	// companions is the set of live companion sessions (companion_tree.go);
 	// popup is lazygit's overlay (popup.go).
-	sub        paneView
+	sub paneView
+	// subAgent is the agent the cursor is on when it is on an agent child
+	// row, "" when it is on the worktree row (which stands for the primary
+	// agent, see agents.go).
+	subAgent   string
 	companions map[string]bool
 	popup      popupState
 }
@@ -201,6 +214,7 @@ func (m Model) refresh() tea.Cmd {
 		if err != nil {
 			errs = append(errs, err.Error())
 		}
+		recs := session.Load(session.Path(status.Root()))
 		var rows []row
 		layout := layoutProjects(cfg.Projects)
 		for _, root := range cfg.Projects {
@@ -218,8 +232,7 @@ func (m Model) refresh() tea.Cmd {
 					root:    root,
 					wt:      wt,
 					session: name,
-					running: slices.Contains(live, name),
-				})
+				}.withAgents(buildAgents(name, wt.Branch, recs, live)))
 			}
 		}
 		orderByOrg(rows)
@@ -332,6 +345,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSearchKey(msg)
 		case modeRename:
 			return m.handleRenameKey(msg)
+		case modeNameAgent:
+			return m.handleNameAgentKey(msg)
 		case modeMoveBranch:
 			return m.handleMoveKey(msg)
 		}
@@ -366,6 +381,8 @@ func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 		return m.handleSearchKey(pasteAsKey(msg.Content))
 	case modeRename:
 		return m.handleRenameKey(pasteAsKey(msg.Content))
+	case modeNameAgent:
+		return m.handleNameAgentKey(pasteAsKey(msg.Content))
 	case modeMoveBranch:
 		return m.handleMoveKey(pasteAsKey(msg.Content))
 	}
@@ -391,10 +408,10 @@ func (m Model) handleStatus(msg statusMsg) (tea.Model, tea.Cmd) {
 		if !m.statusLoaded || !m.cfg.Notify || m.prevStates[session] == e.State {
 			continue
 		}
-		if m.mode == modeFocus && session == m.selSession && m.sub == viewAgent {
+		if m.looking(session) {
 			continue // you are looking at it (not when a companion is what you see)
 		}
-		if body := notification(session, e.State); body != "" {
+		if body := notification(m.notifyName(session), e.State); body != "" {
 			cmds = append(cmds, func() tea.Msg { _ = sendNotification("drover", body); return nil })
 		}
 	}
@@ -573,6 +590,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.reloadConfig()
 	case "n":
 		return m.openNew()
+	case "N":
+		return m.newAgent()
 	case "/":
 		return m.openSearch()
 	case "w":
@@ -597,37 +616,20 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// ensureSession starts the selected worktree's agent when it isn't running.
-func (m *Model) ensureSession(r row, resume bool) bool {
-	if m.tmux.Has(r.session) {
-		return true
-	}
-	// A file left by an earlier run must not show as this session's state.
-	_ = status.Remove(status.Dir(), r.session)
-	agent, err := hooks.Prepare(m.cfg.AgentCmd, filepath.Join(status.Root(), "claude-settings.json"))
-	if err != nil {
-		// The agent still starts; only the live status is lost.
-		m.status = "status hooks unavailable: " + err.Error()
-	}
-	if resume {
-		agent = m.withResume(agent)
-	}
-	if err := m.tmux.Spawn(r.session, r.wt.Path, agent); err != nil {
-		m.status = err.Error()
-		return false
-	}
-	m.sized = size{}
-	m.setRunning(r.session, true)
-	return true
-}
-
 func (m Model) focus() (tea.Model, tea.Cmd) {
 	r, ok := m.selected()
-	if ok && m.viewOf(r) != viewAgent {
-		return m.openView(m.viewOf(r)) // restarts the companion if it has ended
-	}
-	if !ok || !m.ensureSession(r, false) {
+	if !ok {
 		return m, nil
+	}
+	if v := m.viewOf(r); v != viewAgent {
+		return m.openView(v) // restarts the companion if it has ended
+	}
+	a, has := m.curAgent(r)
+	switch {
+	case !has:
+		return m.openNameAgent(r, false) // no session here yet: ask for a name
+	case !a.running:
+		return m.revive(r, a)
 	}
 	m.enterFocus()
 	return m, m.startPreview()
@@ -643,8 +645,15 @@ func (m Model) attach() (tea.Model, tea.Cmd) {
 		if !m.ensureCompanion(r, v) {
 			return m, nil
 		}
-	} else if !m.ensureSession(r, false) {
-		return m, nil
+	} else {
+		a, has := m.curAgent(r)
+		if !has {
+			m.status = "no session here: enter starts one"
+			return m, nil
+		}
+		if !m.reviveSession(r, a) {
+			return m, nil
+		}
 	}
 	name := m.target(r)
 	_ = m.tmux.PrepareAttach(name)
@@ -653,23 +662,48 @@ func (m Model) attach() (tea.Model, tea.Cmd) {
 	})
 }
 
+// kill is x on the row under the cursor: a companion is closed; a running
+// agent is stopped but keeps its row, so it can be resumed; a stopped one is
+// forgotten.
 func (m Model) kill() (tea.Model, tea.Cmd) {
 	r, ok := m.selected()
 	if ok && m.viewOf(r) != viewAgent {
 		return m.closeCompanion(r)
 	}
-	if !ok || !r.running {
+	if !ok {
 		return m, nil
 	}
-	if err := m.tmux.Kill(r.session); err != nil {
+	a, has := m.curAgent(r)
+	if !has {
+		return m, nil
+	}
+	if _, onChild := m.agentUnderCursor(r); !onChild && runningCount(r) > 1 {
+		m.status = "several agents run here: move to one (↓) and press x"
+		return m, nil
+	}
+	if !a.running {
+		return m.forgetAgent(r, a)
+	}
+	if err := m.tmux.Kill(a.session); err != nil {
 		m.status = err.Error()
 	}
-	_ = status.Remove(status.Dir(), r.session)
+	_ = status.Remove(status.Dir(), a.session)
 	m.sized = size{}
 	m.preview = preview{}
 	m.scroll = scrollState{}
-	m.setRunning(r.session, false)
+	m.setRunning(a.session, false)
 	return m, m.refresh()
+}
+
+// runningCount is how many of a worktree's agents are running.
+func runningCount(r row) int {
+	n := 0
+	for _, a := range r.agentList() {
+		if a.running {
+			n++
+		}
+	}
+	return n
 }
 
 func (m Model) killAll() (tea.Model, tea.Cmd) {
@@ -684,6 +718,9 @@ func (m Model) killAll() (tea.Model, tea.Cmd) {
 	}
 	for _, r := range m.all {
 		_ = status.Remove(status.Dir(), r.session)
+		for _, a := range r.agentList() {
+			_ = status.Remove(status.Dir(), a.session)
+		}
 	}
 	m.forgetCompanions() // the server took them down too
 	m.sized = size{}

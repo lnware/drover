@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -10,6 +11,7 @@ import (
 	"github.com/lnware/drover/internal/alias"
 	"github.com/lnware/drover/internal/claude"
 	"github.com/lnware/drover/internal/gitinfo"
+	"github.com/lnware/drover/internal/session"
 	"github.com/lnware/drover/internal/status"
 	"github.com/lnware/drover/internal/tmux"
 	"github.com/lnware/drover/internal/worktree"
@@ -110,12 +112,26 @@ func (m Model) handleMoved(msg branchMoved) (tea.Model, tea.Cmd) {
 			if out[i].session == old {
 				out[i].session = neu
 				out[i].wt.Path, out[i].wt.Branch, out[i].wt.Group = msg.res.Worktree.Path, msg.res.Worktree.Branch, msg.res.Worktree.Group
+				// The stopped sessions' tmux names carry the worktree key.
+				list := slices.Clone(out[i].sess)
+				for j := range list {
+					if strings.HasPrefix(list[j].session, old+"~") {
+						list[j].session = neu + list[j].session[len(old):]
+					}
+				}
+				out[i].sess = list
 			}
 		}
 		return out
 	}
 	m.all, m.rows = patch(m.all), patch(m.rows)
 	if old != neu {
+		if err := session.MoveWorktree(session.Path(status.Root()), old, neu); err != nil {
+			m.notice += " · its sessions were not moved: " + err.Error()
+		}
+		if strings.HasPrefix(m.subAgent, old+"~") {
+			m.subAgent = neu + m.subAgent[len(old):]
+		}
 		m.git = rekey(m.git, old, neu, func(s gitinfo.Status) gitinfo.Status {
 			s.Branch = msg.res.Worktree.Branch
 			return s

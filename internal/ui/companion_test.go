@@ -114,8 +114,9 @@ func TestChildRowKeys(t *testing.T) {
 	m.mode = modeList
 	names := ids(visibleItems(m.items()))
 	term, edit := tmux.CompanionName("term", m.rows[0].session), tmux.CompanionName("edit", m.rows[0].session)
-	if i := slices.Index(names, term); i < 0 || names[i+1] != edit || names[i-1] != m.rows[0].session {
-		t.Fatalf("children must follow their worktree in order: %v", names)
+	// the agent comes first among the children, then the terminal, then the editor
+	if i := slices.Index(names, term); i < 0 || names[i+1] != edit || names[i-1] != agentItemID(m.rows[0].session) || names[i-2] != m.rows[0].session {
+		t.Fatalf("children must follow their worktree in order (agent, terminal, editor): %v", names)
 	}
 	// h goes to the parent and never folds.
 	foldsBefore := len(m.folds)
@@ -125,7 +126,7 @@ func TestChildRowKeys(t *testing.T) {
 		t.Errorf("left on a child: sub %d sel %q folds %v", m.sub, m.selSession, m.folds)
 	}
 	// a from a child jumps to the parent too; enter on a child focuses it.
-	m.move(2)
+	m.move(3) // the agent row, the terminal row, then the editor row
 	if m.sub != viewEditor {
 		t.Fatalf("sub = %d, want the editor row", m.sub)
 	}
@@ -133,7 +134,7 @@ func TestChildRowKeys(t *testing.T) {
 	if m.sub != viewAgent {
 		t.Error("a must jump to the parent row")
 	}
-	m.move(2)
+	m.move(3)
 	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = next.(Model)
 	if m.mode != modeFocus || m.target(m.rows[0]) != edit {
@@ -311,14 +312,14 @@ func TestChildRowsAndBreadcrumbReplaceTheTabStrip(t *testing.T) {
 	m.companions[tmux.CompanionName("edit", r.session)] = true
 	m.companions[tmux.CompanionName("term", r.session)] = true
 	m.moveTo(visibleItems(m.items())[2]) // worktree row: after the project and group headers
-	m.step(2)                            // terminal, then editor
+	m.step(3)                            // the agent, then terminal, then editor
 	if m.sub != viewEditor {
 		t.Fatalf("sub = %d, want the editor row", m.sub)
 	}
 	for _, mode := range []mode{modeList, modeFocus} {
 		m.mode = mode
 		plain := ansi.Strip(m.render())
-		for _, want := range []string{"├ terminal ●", "└ editor ●", "main › editor"} {
+		for _, want := range []string{"├── $ terminal ●", "└── ✎ editor ●", "main › editor"} {
 			if !strings.Contains(plain, want) {
 				t.Errorf("mode %d: view lacks %q", mode, want)
 			}

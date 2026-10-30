@@ -7,6 +7,8 @@ import (
 
 	"github.com/lnware/drover/internal/claude"
 	"github.com/lnware/drover/internal/hooks"
+	"github.com/lnware/drover/internal/session"
+	"github.com/lnware/drover/internal/status"
 	"github.com/lnware/drover/internal/tmux"
 	"github.com/lnware/drover/internal/worktree"
 )
@@ -100,19 +102,35 @@ func (m Model) remove() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.confirmRemove, m.busy = "", true
-	root, path := r.root, r.wt.Path
-	return m, func() tea.Msg { return worktreeRemoved{err: worktree.Remove(root, path)} }
+	root, path, key, agents := r.root, r.wt.Path, r.session, r.agentList()
+	return m, func() tea.Msg {
+		err := worktree.Remove(root, path)
+		if err == nil {
+			// The worktree's stopped sessions go with it: they have nowhere to resume.
+			_ = session.RemoveWorktree(session.Path(status.Root()), key)
+			for _, a := range agents {
+				_ = status.Remove(status.Dir(), a.session)
+			}
+		}
+		return worktreeRemoved{err: err}
+	}
 }
 
-// resume restarts an ended session and continues its previous conversation.
+// resume is v: a stopped agent comes back with its own conversation; in a
+// worktree with no session it continues the folder's last conversation as a
+// new session.
 func (m Model) resume() (tea.Model, tea.Cmd) {
 	r, ok := m.selected()
 	if !ok {
 		return m, nil
 	}
-	if r.running {
+	a, has := m.curAgent(r)
+	if has && a.running {
 		m.status = "already running; press enter to focus it"
 		return m, nil
+	}
+	if has {
+		return m.revive(r, a)
 	}
 	if m.resumeArgs() == "" {
 		m.status = "set resume_args in the config to resume this agent"
@@ -122,11 +140,7 @@ func (m Model) resume() (tea.Model, tea.Cmd) {
 		m.status = "no previous conversation in " + r.wt.Path + " (enter starts a new one)"
 		return m, nil
 	}
-	if !m.ensureSession(r, true) {
-		return m, nil
-	}
-	m.enterFocus()
-	return m, m.startPreview()
+	return m.openNameAgent(r, true)
 }
 
 func (m Model) resumeArgs() string {

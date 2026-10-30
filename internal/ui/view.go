@@ -145,6 +145,8 @@ func (m Model) footer() string {
 		s = doneStyle.Render(" " + m.notice)
 	case m.mode == modeSearch:
 		s = hintLine("SEARCH /"+m.search+"█", []hint{{"enter", "keep filter", 1}, {"esc", "clear", 1}, {"↑/↓", "move", 2}}, w)
+	case m.mode == modeNameAgent:
+		s = hintLine("NEW AGENT", []hint{{"enter", "start (empty: suggested name)", 1}, {"esc", "cancel", 1}, {"ctrl+u", "clear", 2}}, w)
 	case m.mode == modeRename:
 		s = hintLine("RENAME", []hint{{"enter", "save (empty clears)", 1}, {"esc", "cancel", 1}, {"ctrl+u", "clear", 2}}, w)
 	case m.mode == modeMoveBranch:
@@ -166,7 +168,8 @@ func (m Model) leftLines(w, h int) []string { return m.layout(w).window(h) }
 func (m Model) renderRow(i int, r row, w int) string {
 	d := m.display(r)
 	label := m.label(r)
-	selected := i == m.cursor && m.hdr == "" && m.sub == viewAgent // a selected child takes the highlight
+	// a selected child (a companion, or an agent row) takes the highlight
+	selected := i == m.cursor && m.hdr == "" && m.sub == viewAgent && m.subAgent == ""
 	bg := colSelected.color()
 
 	// The state word goes right-aligned when it fits; the focus badge takes
@@ -249,6 +252,8 @@ func (m Model) rightLines(w, h int) []string {
 		lines = append(lines, m.newLines()...)
 	case m.mode == modeRename:
 		lines = append(lines, m.renameLines()...)
+	case m.mode == modeNameAgent:
+		lines = append(lines, m.nameAgentLines()...)
 	case m.mode == modeMoveBranch:
 		lines = append(lines, m.renameBranchLines()...)
 	case m.help:
@@ -278,18 +283,19 @@ func (m Model) helpLines() []string {
 		{"End q esc", "back to live output"},
 		{"mouse", "click selects/focuses, wheel scrolls"},
 		{"n", "new worktree in this project"},
+		{"N", "new agent session in this worktree: asks for a name (empty: named after the branch)"},
 		{"/", "search; filters as you type (enter keeps, esc clears)"},
 		{"w", "show only agents waiting, done or in error"},
-		{"r", "rename: a display label, git is untouched"},
+		{"r", "rename: an agent's name, or a worktree's display label"},
 		{"M", "rename the branch and move the folder (stopped sessions only)"},
 		{"esc", "clear the search and attention filter"},
-		{"v", "resume the last conversation here"},
+		{"v", "resume the stopped agent under the cursor with its own conversation"},
 		{"d", "remove the worktree (press twice, keeps the branch)"},
 		{"T  o", "start a terminal / editor: a child row under the worktree, focused"},
 		{"G", "lazygit popup (ctrl+\\ / ctrl+q closes and ends it)"},
 		{"a", "back to the agent (the worktree row)"},
 		{"A", "attach the shown pane full screen (C-a d returns)"},
-		{"x", "kill what the cursor is on (agent, terminal or editor)"},
+		{"x", "stop what the cursor is on (agent, terminal or editor); on a stopped agent, forget it"},
 		{"X", "kill all sessions (press twice)"},
 		{"c", "edit the config in $VISUAL / $EDITOR; reloads when it exits"},
 		{"R", "reload the config (theme, projects, icons, commands; socket and mouse need a restart)"},
@@ -366,6 +372,8 @@ func (m Model) headerTitle(r row) string {
 	title := projectStyle.Render(name)
 	if v := m.viewOf(r); v != viewAgent { // breadcrumb: worktree › terminal
 		title += dimStyle.Render(" › ") + focusHint.Render(v.label())
+	} else if a, ok := m.agentUnderCursor(r); ok { // worktree › feature-a
+		title += dimStyle.Render(" › ") + focusHint.Render(m.agentLabel(a))
 	}
 	if branch := r.wt.Label(); branch != name {
 		title += dimStyle.Render("  " + branch)
@@ -394,12 +402,17 @@ func orgBand(org string, w int) string {
 // paneState is the pane header's status text: the agent's state with its age,
 // or whether a companion (a child row's own program) is running.
 func (m Model) paneState(r row) string {
-	d := m.display(r)
-	state := d.style.Render(d.glyph + " " + d.word)
-	if !r.running {
-		state = d.style.Render("○ no session")
-	} else if e, ok := m.agents[r.session]; ok {
-		state += dimStyle.Render(" · " + age(e.Since, time.Now()))
+	state := idleStyle.Render("○ no session")
+	if a, ok := m.curAgent(r); ok {
+		d := m.agentDisplay(a)
+		if !a.running {
+			state = d.style.Render("○ stopped")
+		} else {
+			state = d.style.Render(d.glyph + " " + d.word)
+			if e, ok := m.agents[a.session]; ok {
+				state += dimStyle.Render(" · " + age(e.Since, time.Now()))
+			}
+		}
 	}
 	if v := m.viewOf(r); v != viewAgent { // a child row shows its own program, not the agent
 		if m.targetRunning(r) {

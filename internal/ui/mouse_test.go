@@ -272,17 +272,23 @@ func TestMouseIgnoredInPromptsHelpAndFocus(t *testing.T) {
 }
 
 // TestClickInPaneFocusesAndFocusSwallowsMouse uses a real tmux on a private
-// socket: focusing starts the agent.
+// socket: a click on a worktree with no session asks for a name, and once it
+// is given the agent starts and is focused.
 func TestClickInPaneFocusesAndFocusSwallowsMouse(t *testing.T) {
 	skipWithoutTmux(t)
 	m := mouseModel(t)
 	manyRows(&m, 2)
 	leftW, _, _ := m.geometry()
 	m = step(m, click(leftW+5, 10, tea.MouseLeft))
-	if m.mode != modeFocus {
-		t.Fatalf("click in the pane left mode %d, want focus", m.mode)
+	if m.mode != modeNameAgent {
+		t.Fatalf("click in the pane left mode %d, want the name prompt", m.mode)
 	}
-	if !m.tmux.Has(m.rows[0].session) {
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // an empty name takes the suggestion
+	m = next.(Model)
+	if m.mode != modeFocus {
+		t.Fatalf("starting the agent left mode %d, want focus", m.mode)
+	}
+	if a, ok := m.curAgent(m.rows[0]); !ok || !m.tmux.Has(a.session) {
 		t.Error("focusing by click did not start the agent")
 	}
 	// In focus mode a click on another row must not select it, and nothing

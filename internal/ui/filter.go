@@ -1,13 +1,17 @@
 package ui
 
 import (
+	"fmt"
+	"maps"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/lnware/drover/internal/alias"
+	"github.com/lnware/drover/internal/session"
 	"github.com/lnware/drover/internal/status"
 )
 
@@ -60,7 +64,7 @@ func (m Model) filtering() bool {
 // including its state word, so "waiting" finds the agents waiting on you.
 func (m Model) matches(r row, query string) bool {
 	if m.attention {
-		switch m.agents[r.session].State {
+		switch s, _ := m.worktreeState(r); s {
 		case status.Waiting, status.Done, status.Error:
 		default:
 			return false
@@ -74,6 +78,7 @@ func (m Model) matches(r row, query string) bool {
 	}
 	hay := strings.ToLower(strings.Join([]string{
 		m.label(r), r.wt.Label(), r.org, r.project, r.session, m.display(r).word,
+		strings.Join(m.agentNames(r), " "),
 	}, " "))
 	for _, term := range strings.Fields(query) { // every word must match
 		if !strings.Contains(hay, term) {
@@ -99,10 +104,28 @@ func (m *Model) applyFilter() {
 
 // setRunning updates a session's running flag in both lists, so the list
 // reacts at once instead of waiting for the next refresh.
-func (m *Model) setRunning(session string, running bool) {
+// setRunning records that an agent session started or stopped, ahead of the
+// next refresh, so the list does not lag behind what the user just did.
+func (m *Model) setRunning(agentSession string, running bool) {
+	base, _, _ := session.Parse(agentSession)
 	for i := range m.all {
-		if m.all[i].session == session {
-			m.all[i].running = running
+		if m.all[i].session != base {
+			continue
+		}
+		list := slices.Clone(m.all[i].sess)
+		found := false
+		for j := range list {
+			if list[j].session == agentSession {
+				list[j].running, found = running, true
+			}
+		}
+		switch {
+		case found:
+			m.all[i] = m.all[i].withAgents(list)
+		case len(list) == 0 && agentSession == base:
+			m.all[i].running = running // a row that has only the one old-style session
+		case running:
+			m.all[i] = m.all[i].withAgents(append(list, agent{session: agentSession, name: agentSession, running: true}))
 		}
 	}
 	m.applyFilter()
@@ -163,7 +186,63 @@ func (m Model) openRename() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	m.mode, m.renameSession, m.input = modeRename, r.session, m.aliases[r.session]
+	if a, onChild := m.agentUnderCursor(r); onChild {
+		m.mode, m.renameSession, m.renameAgent, m.input = modeRename, r.session, a.session, m.agentLabel(a)
+		return m, nil
+	}
+	m.mode, m.renameSession, m.renameAgent, m.input = modeRename, r.session, "", m.aliases[r.session]
+	return m, nil
+}
+
+// renameAgentTo gives the agent a new name: a recorded session in the
+// registry, an old-style one (which has no record) as a label.
+func (m Model) renameAgentTo(name string) (tea.Model, tea.Cmd) {
+	r, ok := m.rowFor(m.renameAgent)
+	a, found := agentByID(r, m.renameAgent)
+	if !ok || !found {
+		m.mode = modeList
+		return m, nil
+	}
+	name = session.CleanName(name)
+	switch {
+	case name == "":
+		m.status = "an agent needs a name"
+		return m, nil
+	case name != m.agentLabel(a) && slices.Contains(m.agentNames(r), name):
+		m.status = fmt.Sprintf("%q is already used in this worktree", name)
+		return m, nil
+	}
+	if a.id != "" {
+		if _, err := session.Rename(session.Path(status.Root()), a.id, name); err != nil {
+			m.status = err.Error()
+			return m, nil
+		}
+		for i := range m.all {
+			if m.all[i].session == r.session {
+				list := slices.Clone(m.all[i].agentList())
+				for j := range list {
+					if list[j].session == a.session {
+						list[j].name = name
+					}
+				}
+				m.all[i] = m.all[i].withAgents(list)
+			}
+		}
+	} else {
+		if err := alias.Set(alias.Path(status.Root()), a.session, name); err != nil {
+			m.status = err.Error()
+			return m, nil
+		}
+		next := maps.Clone(m.aliases)
+		if next == nil {
+			next = map[string]string{}
+		}
+		next[a.session] = name
+		m.aliases = next
+	}
+	m.mode, m.renameAgent = modeList, ""
+	m.notice = "renamed to " + name
+	m.applyFilter()
 	return m, nil
 }
 
@@ -172,8 +251,11 @@ func (m Model) handleRenameKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.status = ""
 	switch msg.String() {
 	case "esc", "ctrl+c":
-		m.mode = modeList
+		m.mode, m.renameAgent = modeList, ""
 	case "enter":
+		if m.renameAgent != "" {
+			return m.renameAgentTo(m.input)
+		}
 		name := strings.TrimSpace(m.input)
 		if err := alias.Set(alias.Path(status.Root()), m.renameSession, name); err != nil {
 			m.status = err.Error()
@@ -204,6 +286,18 @@ func (m Model) renameLines() []string {
 	for _, r := range m.all {
 		if r.session == m.renameSession {
 			branch = r.wt.Label() + "  " + filepath.ToSlash(r.wt.Path)
+		}
+	}
+	if m.renameAgent != "" {
+		return []string{
+			"",
+			" " + titleStyle.Render("Rename agent"),
+			"",
+			" name    " + m.input + focusHint.Render("█"),
+			" where   " + dimStyle.Render(branch),
+			"",
+			" " + dimStyle.Render("The name is only a label here; it is also shown in Claude's"),
+			" " + dimStyle.Render("session list the next time the session starts."),
 		}
 	}
 	return []string{

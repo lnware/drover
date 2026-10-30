@@ -52,13 +52,17 @@ func (m Model) target(r row) string {
 	if v := m.viewOf(r); v != viewAgent {
 		return tmux.CompanionName(v.kind(), r.session)
 	}
+	if a, ok := m.curAgent(r); ok {
+		return a.session
+	}
 	return r.session
 }
 
 // targetRunning reports whether the shown session exists.
 func (m Model) targetRunning(r row) bool {
 	if m.viewOf(r) == viewAgent {
-		return r.running
+		a, ok := m.curAgent(r)
+		return ok && a.running
 	}
 	return m.companions[m.target(r)]
 }
@@ -292,5 +296,8 @@ func (m Model) notRunningHint(r row) string {
 	if v := m.viewOf(r); v != viewAgent {
 		return "The " + v.label() + " is not running. Press enter to start it."
 	}
-	return "No session here. Press enter to start `" + m.cfg.AgentCmd + "`."
+	if a, ok := m.curAgent(r); ok && !a.running {
+		return m.agentLabel(a) + " is stopped. Press enter (or v) to resume it, x to forget it."
+	}
+	return "No session here. Press enter to name and start `" + m.cfg.AgentCmd + "`."
 }
