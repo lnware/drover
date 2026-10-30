@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -135,11 +136,27 @@ func (d Driver) Kill(name string) error {
 	return err
 }
 
-// KillServer stops the private server and every session on it.
+// KillServer stops the private server and every session on it, and removes
+// its socket file: tmux leaves the file behind, so a server per test or per
+// run would otherwise pile up thousands of dead sockets in the tmux directory.
 func (d Driver) KillServer() error {
 	_, err := d.run("kill-server")
 	if err != nil && noServer(err) {
-		return nil
+		err = nil
+	}
+	if err == nil {
+		_ = os.Remove(d.socketPath())
 	}
 	return err
+}
+
+// socketPath is where tmux puts the socket of `-L name`: $TMUX_TMPDIR (else
+// /tmp), then tmux-<uid>. It is worked out here because a server that has
+// already exited can no longer be asked.
+func (d Driver) socketPath() string {
+	dir := os.Getenv("TMUX_TMPDIR")
+	if dir == "" {
+		dir = "/tmp"
+	}
+	return filepath.Join(dir, "tmux-"+strconv.Itoa(os.Getuid()), d.Socket)
 }

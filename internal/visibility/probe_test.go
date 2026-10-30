@@ -2,6 +2,7 @@ package visibility
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -78,8 +79,13 @@ func outerTmux(t *testing.T) (run func(args ...string) string, socket string) {
 		return strings.TrimSpace(string(out))
 	}
 	run("new-session", "-d", "-s", "popup", "-x", "100", "-y", "30", "sleep 600")
-	t.Cleanup(func() { _ = exec.Command("tmux", "-L", name, "kill-server").Run() })
-	return run, run("display-message", "-p", "#{socket_path}")
+	path := run("display-message", "-p", "#{socket_path}")
+	// tmux leaves the socket file behind, so it is removed here as well.
+	t.Cleanup(func() {
+		_ = exec.Command("tmux", "-L", name, "kill-server").Run()
+		_ = os.Remove(path)
+	})
+	return run, path
 }
 
 // TestProbeFollowsAttachAndWindows drives the real thing: a control-mode
