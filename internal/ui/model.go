@@ -15,6 +15,7 @@ import (
 	"github.com/lnware/drover/internal/config"
 	"github.com/lnware/drover/internal/gitinfo"
 	"github.com/lnware/drover/internal/notify"
+	"github.com/lnware/drover/internal/pr"
 	"github.com/lnware/drover/internal/session"
 	"github.com/lnware/drover/internal/status"
 	"github.com/lnware/drover/internal/tmux"
@@ -45,6 +46,7 @@ const (
 	modeSwitch    // the view switcher overlay is open (switcher.go)
 	modeDigest    // the list of what happened in a context while you were away (context.go)
 	modeCommand   // the ":" command line is open (command.go)
+	modePR        // the popup of what a pull request from the branch would hold (pr_view.go)
 )
 
 type row struct {
@@ -159,7 +161,11 @@ type Model struct {
 	idlePolls int
 	// git is the latest read of each worktree; gitSeeded is set once the
 	// first full read has been requested.
-	git       map[string]gitinfo.Status
+	git map[string]gitinfo.Status
+	// the pull request popup: what was read for which worktree, and whether it is still being read
+	prSum     pr.Summary
+	prErr     string
+	prLoading bool
 	gitTicks  int
 	gitSeeded bool
 	gitBusy   bool           // a read is running; new requests queue in gitWant
@@ -301,6 +307,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ctxActive, m.ctxLast = msg.active, msg.last
 		m.applyFilter()
 		return m, m.startPreview()
+	case prMsg:
+		return m.handlePRRead(msg)
 	case foldsLoaded:
 		m.folds = msg.set
 		m.reselect()
@@ -387,6 +395,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleDigestKey(msg)
 		case modeCommand:
 			return m.handleCommandKey(msg)
+		case modePR:
+			return m.handlePRKey(msg)
 		}
 		return m.handleKey(msg)
 	case tea.PasteMsg:
@@ -615,6 +625,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.help = true
 	case ":":
 		return m.openCommand()
+	case "V":
+		return m.openPopup() // reviewing happens in lazygit
 	case "up", "k":
 		m.move(-1)
 		return m, tea.Batch(m.startPreview(), m.readSelectedGit())

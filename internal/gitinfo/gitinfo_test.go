@@ -25,7 +25,7 @@ u UU N... 100644 100644 100644 100644 aaa bbb ccc conflict.go
 	want := Status{
 		Branch: "feature/x", Head: "1234567", Upstream: "origin/feature/x", HasUpstream: true,
 		Ahead: 3, Behind: 1,
-		Staged: 3, Modified: 2, // staged.go, both.go, new.go | modified.go, both.go
+		Staged: 3, Modified: 2, Partial: 1, // staged.go, both.go, new.go | modified.go, both.go | both.go
 		Untracked: 3, Conflicts: 1,
 	}
 	if got != want {
@@ -33,6 +33,9 @@ u UU N... 100644 100644 100644 100644 aaa bbb ccc conflict.go
 	}
 	if !got.Dirty() {
 		t.Error("Dirty() = false")
+	}
+	if n := got.ToReview(); n != 5 { // modified.go, both.go and the three untracked files
+		t.Errorf("ToReview() = %d, want 5", n)
 	}
 }
 

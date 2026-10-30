@@ -10,8 +10,8 @@ import (
 )
 
 // "Next needing me" walks the agents of the active context that want you
-// (waiting for an answer, finished or failed), in the order of the list,
-// wrapping round. It is how you avoid scanning the list for what to look at.
+// (waiting for an answer, finished or failed, or stopped with files to review),
+// in the order of the list, wrapping round. It is how you avoid scanning the list for what to look at.
 
 // needTarget is an agent that wants you.
 type needTarget struct {
@@ -19,13 +19,21 @@ type needTarget struct {
 	session string // the agent's tmux session
 }
 
-// needsYou reports whether a running agent waits, has finished or failed.
-func (m Model) needsYou(a agent) bool {
+// needsYou reports whether a running agent wants you: it waits, has finished or
+// failed, or has stopped working and left files that are not staged yet, which
+// is work waiting for your review.
+func (m Model) needsYou(r row, a agent) bool {
 	if !a.running {
 		return false
 	}
 	s, ok := m.agentState(a)
-	return ok && (s == status.Waiting || s == status.Done || s == status.Error)
+	if !ok {
+		return false
+	}
+	if s == status.Waiting || s == status.Done || s == status.Error {
+		return true
+	}
+	return s != status.Working && m.git[r.session].ToReview() > 0
 }
 
 // needing lists the agents of the active context that want you.
@@ -33,7 +41,7 @@ func (m Model) needing() []needTarget {
 	var out []needTarget
 	for _, r := range m.contextRows() {
 		for _, a := range r.agentList() {
-			if m.needsYou(a) {
+			if m.needsYou(r, a) {
 				out = append(out, needTarget{base: r.session, session: a.session})
 			}
 		}

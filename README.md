@@ -70,8 +70,9 @@ Press `?` in drover for the full list. The main ones:
 | `ctrl+\` / `ctrl+q` | leave focus mode (every other key goes to the pane)                    |
 | `ctrl+z`            | in focus mode: zoom the pane to the whole terminal, and back           |
 | `F12`               | open the switcher popup; `←`/`→` change its scope (views, worktrees, projects, contexts), `F12`/`↑↓` choose, `enter` goes, `esc` cancels (list and focus mode) |
-| `tab` / `shift+tab` | go to the next / previous agent that waits, finished or failed, in this context (list; `next_key` sets a key that also works in focus mode) |
-| `:`                 | the command line (list only): `ctx`, `wt`, `next`, `term`, `edit`, `new`, `config`, `reload`, `help`, `q` |
+| `V`                 | review the changes in lazygit (also `:review`), like `G` |
+| `tab` / `shift+tab` | go to the next / previous agent that waits, finished, failed or left files to review, in this context (list; `next_key` sets a key that also works in focus mode) |
+| `:`                 | the command line (list only): `ctx`, `wt`, `review`, `pr`, `next`, `term`, `edit`, `new`, `config`, `reload`, `help`, `q` |
 | `F1`-`F9` / `ctrl+1`-`9` | go straight to view 1-9, starting the terminal or editor if needed |
 | `PgUp` / `PgDn`     | scroll the output back / forward (MacBook: `Fn+↑` / `Fn+↓`)            |
 | `End` / `q` / `esc` | back to live output while scrolled                                     |
@@ -216,6 +217,19 @@ name = "Free time"
 projects = ["~/dev/personal/garden-app", "~/dev/personal/home-lab"]
 ```
 
+**Review.** Review happens in lazygit, and git's index is the record of it: a
+file you staged is reviewed, a file with changes that are not staged is
+waiting. Drover keeps no marks of its own. A row shows `✎3` for three files
+waiting (changed but not staged, or new), and `↻1` for one of them that you had
+staged and that was changed again, so what you reviewed is no longer all of it.
+The title bar counts the worktrees with files waiting, and `tab` also stops at
+an agent that has stopped working and left files to review. `V` (or `:review`)
+opens lazygit for the worktree, like `G`. `:pr` shows what a pull request from
+the branch would hold: the commits since it left the default branch (origin's
+`HEAD`, else `origin/main`, `origin/master`, `main`, `master`), the files and
+lines, how many files with uncommitted changes are not included, and how many
+commits are not pushed yet.
+
 **The command line.** `:` in the list opens a prompt in the footer with the
 matching commands above it: `tab` completes, `↑`/`↓` choose, `enter` runs the
 chosen one, `esc` cancels, and `↑` on an empty line recalls the last command.
@@ -224,6 +238,8 @@ chosen one, `esc` cancels, and `↑` on an empty line recalls the last command.
 | --------------- | ---------------------------------------------------------------- |
 | `ctx [name\|-]` | switch context: the next one, a name (a prefix is enough), or back |
 | `wt <name>`     | jump to a worktree of this context by project or branch          |
+| `review`        | review the changes in lazygit                                    |
+| `pr`            | what a pull request from this branch would hold                  |
 | `next`          | go to the next agent that needs you                              |
 | `agent` `term` `edit` | show the agent, open the terminal or the editor            |
 | `new` `config` `reload` `help` `q` | the keys `n`, `c`, `R`, `?` and `q`            |

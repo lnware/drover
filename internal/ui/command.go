@@ -38,6 +38,8 @@ func (m Model) commands() []command {
 	return []command{
 		{name: "ctx", help: "switch context", listAll: true, complete: completeContexts, run: runContext},
 		{name: "wt", help: "jump to a worktree", hint: "<name>", complete: completeWorktrees, run: runWorktree},
+		{name: "review", help: "review the changes in lazygit", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.openPopup() }},
+		{name: "pr", help: "what a pull request from this branch would hold", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.openPR() }},
 		{name: "next", help: "next agent that needs you", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.nextNeeding(1) }},
 		{name: "agent", help: "show the agent of this worktree", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.openView(viewAgent) }},
 		{name: "term", help: "open the terminal", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.openView(viewTerminal) }},

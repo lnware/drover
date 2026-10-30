@@ -77,6 +77,8 @@ func (m Model) render() string {
 			return m.spliceBox(frame, m.switcherBox())
 		case modeDigest:
 			return m.spliceBox(frame, m.digestBox())
+		case modePR:
+			return m.spliceBox(frame, m.prBox())
 		case modeCommand:
 			box := m.commandBox()
 			return m.spliceBoxAt(frame, box, 0, max(m.height-1-len(box), 1))
@@ -140,6 +142,9 @@ func (m Model) titleBar() string {
 	if working > 0 {
 		right += workingStyle.Render(fmt.Sprintf("● %d working", working)) + dimStyle.Render(" · ")
 	}
+	if n := m.reviewCount(); n > 0 {
+		right += doneStyle.Render(fmt.Sprintf("✎ %d to review", n)) + dimStyle.Render(" · ")
+	}
 	if m.filtering() {
 		right += dimStyle.Render(fmt.Sprintf("%d of %d worktrees ", len(m.rows), len(m.contextRows())))
 	} else {
@@ -166,6 +171,8 @@ func (m Model) footer() string {
 		s = hintLine("SEARCH /"+m.search+"█", []hint{{"enter", "keep filter", 1}, {"esc", "clear", 1}, {"↑/↓", "move", 2}}, w)
 	case m.mode == modeNameAgent:
 		s = hintLine("NEW AGENT", []hint{{"enter", "start (empty: suggested name)", 1}, {"esc", "cancel", 1}, {"ctrl+u", "clear", 2}}, w)
+	case m.mode == modePR:
+		s = hintLine("PULL REQUEST", []hint{{"any key", "close", 1}}, w)
 	case m.mode == modeCommand:
 		s = m.commandLine()
 	case m.mode == modeDigest:
@@ -218,12 +225,41 @@ func (m Model) renderRow(i int, r row, w int) string {
 		right = word.Render(d.word)
 	}
 	// Git markers sit left of the state word, only where they still fit.
-	if st, ok := m.git[r.session]; ok {
+	{
 		var rowBg color.Color
 		if selected {
 			rowBg = bg
 		}
-		if brief := gitBrief(st, rowBg); brief != "" {
+		var brief string
+		if st, ok := m.git[r.session]; ok {
+			brief = gitBrief(st, rowBg)
+		}
+		if chip, partial := reviewChip(m.git[r.session]); chip != "" {
+			chipStyle, partialStyle := doneStyle, waitingStyle
+			if selected {
+				chipStyle, partialStyle = chipStyle.Background(bg), partialStyle.Background(bg)
+			}
+			styled := chipStyle.Render(chip)
+			if partial != "" {
+				styled += plain.Render(" ") + partialStyle.Render(partial)
+			}
+			// both when they fit; else the git bar as before (it carries the
+			// same counts); else the chip alone
+			candidates := []string{styled}
+			if brief != "" {
+				candidates = []string{styled + plain.Render(" ") + brief, brief, styled}
+			}
+			for _, c := range candidates {
+				sep := ""
+				if right != "" {
+					sep = plain.Render(" ")
+				}
+				if used+2+lipgloss.Width(c)+lipgloss.Width(sep)+lipgloss.Width(right) < w {
+					right = c + sep + right
+					break
+				}
+			}
+		} else if brief != "" {
 			sep := ""
 			if right != "" {
 				sep = plain.Render(" ")
@@ -305,6 +341,7 @@ func (m Model) helpLines() []string {
 		{"F", "fold or unfold everything"},
 		{"ctrl+\\ / ctrl+q", "leave focus mode"},
 		{m.zoomKey(), "zoom the focused pane to the whole terminal, and back"},
+		{"V", "review the changes in lazygit (also :review); :pr shows what a pull request would hold"},
 		{"tab / shift+tab", "go to the next / previous agent that waits, finished or failed in this context (the list)"},
 		{":", "command line: ctx (switch context), wt (jump to a worktree), term, edit, new, config, reload, help, q"},
 		{m.switchKey(), "open the switcher: ←/→ views of this worktree, every worktree, every project (list and focus mode)"},

@@ -20,6 +20,7 @@ type Status struct {
 	Behind      int
 	Staged      int
 	Modified    int
+	Partial     int // files staged and then changed again: the staged part was reviewed, the rest was not
 	Untracked   int
 	Conflicts   int
 	HasUpstream bool
@@ -29,6 +30,12 @@ type Status struct {
 func (s Status) Dirty() bool {
 	return s.Staged+s.Modified+s.Untracked+s.Conflicts > 0
 }
+
+// ToReview is the number of files with changes that are not staged: edited
+// since the index (a file you staged and the agent changed again counts), plus
+// files git does not know. Staging is how the work gets reviewed, so these are
+// the ones still waiting for a look.
+func (s Status) ToReview() int { return s.Modified + s.Untracked }
 
 // timeout bounds a read; a huge repository must not stall the UI's refresh.
 const timeout = 5 * time.Second
@@ -87,6 +94,9 @@ func parse(out string) Status {
 				}
 				if line[3] != '.' {
 					s.Modified++
+				}
+				if line[2] != '.' && line[3] != '.' {
+					s.Partial++
 				}
 			}
 		}
