@@ -72,7 +72,7 @@ func (m Model) toParent(child item) (tea.Model, tea.Cmd) {
 // takes the usual selected-row styling and the FOCUS badge.
 func (m Model) renderChild(it item, selected bool, w int) string {
 	plain, paint := childStyles(selected)
-	left := lead(plain, selected, 5) + paint(sepStyle).Render(connector(it.last)) + plain.Render(" ") +
+	left := lead(plain, selected, 5) + paint(connectorStyle()).Render(connector(it.last)) + plain.Render(" ") +
 		paint(doneStyle).Render(m.icons().icon(it.view)) + plain.Render(" "+it.view.label()+" ") + paint(doneStyle).Render("●")
 	right := ""
 	if selected && m.mode == modeFocus {

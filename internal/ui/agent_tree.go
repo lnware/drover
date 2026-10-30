@@ -98,7 +98,7 @@ func (m Model) renderAgent(it item, selected bool, w int) string {
 	if !a.running {
 		nameStyle = idleStyle
 	}
-	left := lead(plain, selected, 5) + paint(sepStyle).Render(connector(it.last)) + plain.Render(" ") +
+	left := lead(plain, selected, 5) + paint(connectorStyle()).Render(connector(it.last)) + plain.Render(" ") +
 		paint(d.style).Render(m.icons().agent) + plain.Render(" ") + paint(nameStyle).Render(a.name)
 
 	var right string
@@ -130,4 +130,10 @@ func joinRow(left, right string, plain lipgloss.Style, w int) string {
 		line = ansi.Truncate(line, w, "")
 	}
 	return line
+}
+
+// connectorStyle is bright and bold, so the thick guide stays visible on both
+// the plain and the selected background; the dim separator colour vanished.
+func connectorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(colMuted.color()).Bold(true)
 }
