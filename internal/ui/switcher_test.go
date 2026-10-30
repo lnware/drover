@@ -78,6 +78,20 @@ func TestSwitcherOverlayAndJumps(t *testing.T) {
 			t.Errorf("the overlay lacks %q:\n%s", want, overlay)
 		}
 	}
+	for i, l := range strings.Split(m.render(), "\n") { // the popup must not change the frame's width
+		if w := ansi.StringWidth(l); w != m.width {
+			t.Fatalf("line %d is %d cells wide, want %d", i, w, m.width)
+		}
+	}
+	box := m.switcherBox()
+	for i, l := range box { // the border closes on every line
+		if ansi.StringWidth(l) != ansi.StringWidth(box[0]) {
+			t.Errorf("box line %d is %d cells wide, the top is %d", i, ansi.StringWidth(l), ansi.StringWidth(box[0]))
+		}
+	}
+	if !strings.Contains(overlay, "╭─ Switch view") || !strings.Contains(overlay, "│ ") {
+		t.Errorf("the switcher is a bordered popup:\n%s", overlay)
+	}
 	press(f12) // the choice moves to the editor
 	press(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if where() != "editor" || m.mode != modeFocus || !m.tmux.Has(tmuxCompanion(m, viewEditor)) {

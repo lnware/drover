@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/lnware/drover/internal/config"
 	"github.com/lnware/drover/internal/tmux"
@@ -148,34 +149,75 @@ func (m Model) pickView(r row, t viewTarget) (tea.Model, tea.Cmd) {
 	return m.switchTo(r, t)
 }
 
-// switcherLines is the overlay, drawn in the right pane like the other forms.
-func (m Model) switcherLines() []string {
+// switcherBox is the switcher as a small bordered popup, centred over the
+// screen: the views of the worktree, the choice marked, a line of keys below.
+// It returns the box's lines and leaves the splice to spliceBox.
+func (m Model) switcherBox() []string {
 	r, ok := m.selected()
 	if !ok {
 		return nil
 	}
 	icons := m.icons()
-	lines := []string{"", " " + titleStyle.Render("Switch view"), ""}
+	var rows []string
 	for i, t := range m.switchTargets(r, false) {
 		label, state := t.view.label(), dimStyle.Render("not started")
 		if t.view == viewAgent {
 			a, _ := agentByID(r, t.agent)
 			label = m.agentLabel(a)
-			state = m.agentDisplay(a).style.Render(m.agentDisplay(a).word)
+			d := m.agentDisplay(a)
+			state = d.style.Render(d.word)
 			if !a.running {
 				state = idleStyle.Render("stopped")
 			}
 		} else if m.companions[tmux.CompanionName(t.view.kind(), r.session)] {
 			state = doneStyle.Render("running")
 		}
-		row := fmt.Sprintf("%d %s %s  %s", i+1, icons.icon(t.view), label, state)
+		name := fmt.Sprintf("%d %s %s", i+1, icons.icon(t.view), label)
 		if i == m.switchSel {
-			lines = append(lines, " "+focusHint.Render("▸ ")+focusHint.Render(fmt.Sprintf("%d %s %s", i+1, icons.icon(t.view), label))+"  "+state)
+			rows = append(rows, focusHint.Render(" ▸ "+name)+"  "+state)
 		} else {
-			lines = append(lines, "   "+row)
+			rows = append(rows, "   "+name+"  "+state)
 		}
 	}
-	return append(lines, "", " "+dimStyle.Render(m.switchKey()+" or ↑/↓ choose · enter or a number go · esc cancel"))
+	keys := dimStyle.Render(" " + m.switchKey() + "/↑↓ choose · enter go · esc cancel")
+	inner := ansi.StringWidth(keys) + 1
+	for _, row := range rows {
+		inner = max(inner, ansi.StringWidth(row)+2)
+	}
+	inner = min(max(inner, 30), m.width-2)
+
+	title := ansi.Truncate(" Switch view ", max(inner-2, 0), "…")
+	top := focusHint.Render("╭─") + projectStyle.Render(title) +
+		focusHint.Render(strings.Repeat("─", max(inner-1-ansi.StringWidth(title), 0))+"╮")
+	side := focusHint.Render("│")
+	box := []string{top}
+	for _, row := range append(append(rows, ""), keys) {
+		box = append(box, side+fit(row, inner)+"\x1b[0m"+side)
+	}
+	return append(box, focusHint.Render("╰"+strings.Repeat("─", inner)+"╯"))
+}
+
+// spliceBox draws box, centred, over a finished frame whose lines are exactly
+// m.width cells wide, keeping that width.
+func (m Model) spliceBox(frame string, box []string) string {
+	if len(box) == 0 {
+		return frame
+	}
+	w := 0
+	for _, l := range box {
+		w = max(w, ansi.StringWidth(l))
+	}
+	lines := strings.Split(frame, "\n")
+	x, y := max((m.width-w)/2, 0), max((m.height-len(box))/2, 0)
+	for i, bl := range box {
+		if y+i >= len(lines) {
+			break
+		}
+		l := lines[y+i]
+		lines[y+i] = fit(ansi.Cut(l, 0, x), x) + "\x1b[0m" + fit(bl, w) + "\x1b[0m" +
+			fit(ansi.Cut(l, x+w, m.width), max(m.width-x-w, 0))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // switchTo puts the cursor on a stop, starting a companion that is not

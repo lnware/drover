@@ -21,7 +21,11 @@ import (
 // zoomChrome is the header the zoomed pane keeps above its terminal area.
 const zoomChrome = 1
 
-func (m Model) zoomed() bool { return m.zoom && m.mode == modeFocus }
+// zoomed holds while the view switcher is open over a zoomed pane, so opening
+// it does not resize the pane underneath.
+func (m Model) zoomed() bool {
+	return m.zoom && (m.mode == modeFocus || (m.mode == modeSwitch && m.switchBack == modeFocus))
+}
 
 // zoomKey is the configured toggle, or the default for a config built by hand.
 func (m Model) zoomKey() string {

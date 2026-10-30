@@ -70,6 +70,14 @@ func (m Model) View() tea.View {
 
 // render draws the whole screen as a string of exactly width x height cells.
 func (m Model) render() string {
+	frame := m.renderBase()
+	if m.mode == modeSwitch && m.width >= minWidth && m.height >= minHeight {
+		return m.spliceBox(frame, m.switcherBox())
+	}
+	return frame
+}
+
+func (m Model) renderBase() string {
 	if m.width == 0 {
 		return ""
 	}
@@ -256,8 +264,6 @@ func (m Model) rightLines(w, h int) []string {
 		lines = append(lines, m.renameLines()...)
 	case m.mode == modeNameAgent:
 		lines = append(lines, m.nameAgentLines()...)
-	case m.mode == modeSwitch:
-		lines = append(lines, m.switcherLines()...)
 	case m.mode == modeMoveBranch:
 		lines = append(lines, m.renameBranchLines()...)
 	case m.help:

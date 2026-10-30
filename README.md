@@ -67,7 +67,7 @@ Press `?` in drover for the full list. The main ones:
 | `F`                 | fold every section, or unfold them all                                 |
 | `ctrl+\` / `ctrl+q` | leave focus mode (every other key goes to the pane)                    |
 | `ctrl+z`            | in focus mode: zoom the pane to the whole terminal, and back           |
-| `F12`               | open the view switcher: the worktree's agents, terminal and editor; `F12`/`↑↓` choose, `enter` or a number go, `esc` cancels (list and focus mode) |
+| `F12`               | open the view switcher popup: the worktree's agents, terminal and editor; `F12`/`↑↓` choose, `enter` or a number go, `esc` cancels (list and focus mode) |
 | `F1`-`F9` / `ctrl+1`-`9` | go straight to view 1-9, starting the terminal or editor if needed |
 | `PgUp` / `PgDn`     | scroll the output back / forward (MacBook: `Fn+↑` / `Fn+↓`)            |
 | `End` / `q` / `esc` | back to live output while scrolled                                     |
