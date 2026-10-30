@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/lnware/drover/internal/status"
 	"github.com/lnware/drover/internal/tmux"
 )
 
@@ -73,7 +74,7 @@ func TestSwitcherOverlayAndJumps(t *testing.T) {
 		t.Fatalf("f12 opens the switcher on the next stop: mode %d sel %d", m.mode, m.switchSel)
 	}
 	overlay := ansi.Strip(m.render())
-	for _, want := range []string{"Switch view", "▸ 3 $ terminal", "1 ◈ one", "2 ◈ two", "4 ✎ editor", "not started"} {
+	for _, want := range []string{"Switch", "▸ 3 $ terminal", "1 ◈ one", "2 ◈ two", "4 ✎ editor", "not started"} {
 		if !strings.Contains(overlay, want) {
 			t.Errorf("the overlay lacks %q:\n%s", want, overlay)
 		}
@@ -89,7 +90,7 @@ func TestSwitcherOverlayAndJumps(t *testing.T) {
 			t.Errorf("box line %d is %d cells wide, the top is %d", i, ansi.StringWidth(l), ansi.StringWidth(box[0]))
 		}
 	}
-	if !strings.Contains(overlay, "╭─ Switch view") || !strings.Contains(overlay, "│ ") {
+	if !strings.Contains(overlay, "╭─ Switch ") || !strings.Contains(overlay, "│ ") {
 		t.Errorf("the switcher is a bordered popup:\n%s", overlay)
 	}
 	press(f12) // the choice moves to the editor
@@ -155,5 +156,83 @@ func TestSwitcherJumpInTheListMovesOnlyTheCursor(t *testing.T) {
 	m = next.(Model)
 	if m.viewOf(m.rows[0]) != viewTerminal || m.mode != modeList {
 		t.Errorf("f2 in the list shows the terminal without focusing it: view %d mode %d", m.viewOf(m.rows[0]), m.mode)
+	}
+}
+
+// switcherScopeModel has three projects of three worktrees; one agent in the
+// last project is waiting.
+func switcherScopeModel(t *testing.T) Model {
+	t.Helper()
+	m := mouseModel(t)
+	manyRows(&m, 3)
+	m.all[7].running = true // tools/feature/tools-01
+	m.agents = map[string]status.Entry{m.all[7].session: {State: status.Waiting}}
+	m.rows = m.all
+	return m
+}
+
+func switcherPress(t *testing.T, m Model, keys ...tea.KeyPressMsg) Model {
+	t.Helper()
+	for _, k := range keys {
+		next, _ := m.Update(k)
+		m = next.(Model)
+	}
+	return m
+}
+
+func TestSwitcherWorktreesScopeListsAttentionFirstAndFilters(t *testing.T) {
+	m := switcherScopeModel(t)
+	right := tea.KeyPressMsg{Code: tea.KeyRight}
+	m = switcherPress(t, m, tea.KeyPressMsg{Code: tea.KeyF12})
+	if m.mode != modeSwitch || m.switchScope != scopeViews {
+		t.Fatalf("f12 opens on the views: mode %d scope %d", m.mode, m.switchScope)
+	}
+	m = switcherPress(t, m, right)
+	items := m.switchItems()
+	if len(items) != 9 || items[0].row != "tools/feature/tools-01" {
+		t.Fatalf("worktrees scope lists all 9 with the waiting one first: %d, first %+v", len(items), items[0])
+	}
+	if shown := ansi.Strip(m.render()); !strings.Contains(shown, "Views · Worktrees · Projects") || !strings.Contains(shown, "waiting") {
+		t.Errorf("the popup shows the scope tabs and the state:\n%s", shown)
+	}
+
+	for _, r := range "plat" {
+		m = switcherPress(t, m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	if got := m.switchItems(); len(got) != 3 || !strings.HasPrefix(got[0].text, "platform") {
+		t.Fatalf("typing filters to the platform worktrees: %+v", got)
+	}
+
+	// the target sits in a folded section: going there opens it
+	m.folds = map[string]bool{"p:Acme/platform": true}
+	m = switcherPress(t, m, tea.KeyPressMsg{Code: tea.KeyDown}, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.mode != modeList || m.selSession != "platform/feature/platform-01" || m.hdr != "" {
+		t.Fatalf("enter goes to the worktree and closes the popup: mode %d sel %q hdr %q", m.mode, m.selSession, m.hdr)
+	}
+	if m.folds["p:Acme/platform"] {
+		t.Error("the section that hid the worktree must be opened")
+	}
+}
+
+func TestSwitcherProjectsScopeAndWrapping(t *testing.T) {
+	m := switcherScopeModel(t)
+	m = switcherPress(t, m, tea.KeyPressMsg{Code: tea.KeyF12}, tea.KeyPressMsg{Code: tea.KeyLeft})
+	if m.switchScope != scopeProjects {
+		t.Fatalf("left from the views wraps to the projects: scope %d", m.switchScope)
+	}
+	items := m.switchItems()
+	if len(items) != 3 || items[2].text != "Globex/tools" || !strings.Contains(ansi.Strip(items[2].right), "1 waiting") {
+		t.Fatalf("projects with their waiting count: %+v", items)
+	}
+	m = switcherPress(t, m, tea.KeyPressMsg{Code: tea.KeyDown}, tea.KeyPressMsg{Code: tea.KeyDown}, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.selSession != "tools/main" {
+		t.Errorf("a project goes to its first worktree: %q", m.selSession)
+	}
+
+	// esc changes nothing
+	before := m.selSession
+	m = switcherPress(t, m, tea.KeyPressMsg{Code: tea.KeyF12}, tea.KeyPressMsg{Code: tea.KeyRight}, tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.mode != modeList || m.selSession != before {
+		t.Errorf("esc closes the popup where it was: mode %d sel %q", m.mode, m.selSession)
 	}
 }

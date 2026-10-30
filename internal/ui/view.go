@@ -156,7 +156,7 @@ func (m Model) footer() string {
 	case m.mode == modeNameAgent:
 		s = hintLine("NEW AGENT", []hint{{"enter", "start (empty: suggested name)", 1}, {"esc", "cancel", 1}, {"ctrl+u", "clear", 2}}, w)
 	case m.mode == modeSwitch:
-		s = hintLine("SWITCH", []hint{{m.switchKey(), "next", 1}, {"enter", "go", 1}, {"1-9", "pick", 2}, {"esc", "cancel", 1}}, w)
+		s = hintLine("SWITCH", []hint{{"←/→", "views · worktrees · projects", 1}, {m.switchKey(), "next", 1}, {"enter", "go", 1}, {"esc", "cancel", 1}}, w)
 	case m.mode == modeRename:
 		s = hintLine("RENAME", []hint{{"enter", "save (empty clears)", 1}, {"esc", "cancel", 1}, {"ctrl+u", "clear", 2}}, w)
 	case m.mode == modeMoveBranch:
@@ -289,7 +289,7 @@ func (m Model) helpLines() []string {
 		{"F", "fold or unfold everything"},
 		{"ctrl+\\ / ctrl+q", "leave focus mode"},
 		{m.zoomKey(), "zoom the focused pane to the whole terminal, and back"},
-		{m.switchKey(), "open the view switcher: agents, terminal, editor (list and focus mode)"},
+		{m.switchKey(), "open the switcher: ←/→ views of this worktree, every worktree, every project (list and focus mode)"},
 		{"f1-f9 / ctrl+1-9", "go straight to view 1-9, starting the terminal or editor if needed"},
 		{"PgUp PgDn", "scroll output back (list: also ctrl+u/d)"},
 		{"End q esc", "back to live output"},

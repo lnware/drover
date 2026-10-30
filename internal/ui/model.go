@@ -118,9 +118,11 @@ type Model struct {
 	nameFor        string
 	nameContinuing bool
 	// the view switcher: the choice in the overlay, and the mode to go back to.
-	switchSel   int
-	switchBack  mode
-	moveSession string // worktree whose branch and folder the M prompt renames
+	switchSel    int
+	switchBack   mode
+	switchScope  int    // scopeViews, scopeWorktrees or scopeProjects
+	switchFilter string // typed text narrowing the long scopes
+	moveSession  string // worktree whose branch and folder the M prompt renames
 
 	input   string
 	newRoot string

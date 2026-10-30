@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/lnware/drover/internal/config"
+	"github.com/lnware/drover/internal/status"
 	"github.com/lnware/drover/internal/tmux"
 )
 
@@ -106,87 +107,288 @@ func (m Model) switchView(step, jump int) (tea.Model, tea.Cmd) {
 		i = 0
 	}
 	m.switchBack, m.switchSel = m.mode, (i+step+len(all))%len(all)
+	m.switchScope, m.switchFilter = scopeViews, ""
 	m.mode = modeSwitch
 	return m, nil
 }
 
-// handleSwitchKey drives the open overlay: the switch key and the arrows move
-// the choice, enter or a number picks, esc leaves it. Nothing reaches the pane.
+// The popup has three scopes, switched with ← and →: the worktree's Views,
+// every Worktree of every project (needing attention first), and the Projects.
+// Views are picked by number; the other two take typed text as a filter.
+const (
+	scopeViews = iota
+	scopeWorktrees
+	scopeProjects
+	scopeCount
+)
+
+var scopeNames = [scopeCount]string{"Views", "Worktrees", "Projects"}
+
+// switchItem is one line of the popup.
+type switchItem struct {
+	text  string     // the plain label, also what the filter matches
+	right string     // the styled state at the end of the line
+	view  viewTarget // scopeViews
+	row   string     // scopeWorktrees and scopeProjects: the session to go to
+}
+
+// projectKey names a project the way the list does: "Acme/infra", or just
+// "infra" when it has no org.
+func projectKey(r row) string { return strings.TrimPrefix(r.org+"/"+r.project, "/") }
+
+// switchItems builds the lines of the current scope, with the filter applied.
+func (m Model) switchItems() []switchItem {
+	icons := m.icons()
+	var items []switchItem
+	switch m.switchScope {
+	case scopeViews:
+		r, ok := m.selected()
+		if !ok {
+			return nil
+		}
+		for i, t := range m.switchTargets(r, false) {
+			label, state := t.view.label(), dimStyle.Render("not started")
+			if t.view == viewAgent {
+				a, _ := agentByID(r, t.agent)
+				label = m.agentLabel(a)
+				d := m.agentDisplay(a)
+				state = d.style.Render(d.word)
+				if !a.running {
+					state = idleStyle.Render("stopped")
+				}
+			} else if m.companions[tmux.CompanionName(t.view.kind(), r.session)] {
+				state = doneStyle.Render("running")
+			}
+			items = append(items, switchItem{text: fmt.Sprintf("%d %s %s", i+1, icons.icon(t.view), label), right: state, view: t})
+		}
+		return items
+	case scopeWorktrees:
+		rows := slices.Clone(m.all)
+		need := func(r row) int { // waiting, error and done come first, in list order within a rank
+			if !r.running {
+				return 0
+			}
+			s, ok := m.worktreeState(r)
+			if ok && (s == status.Waiting || s == status.Error || s == status.Done) {
+				return urgency(s, true)
+			}
+			return 0
+		}
+		slices.SortStableFunc(rows, func(a, b row) int { return need(b) - need(a) })
+		for _, r := range rows {
+			d := m.display(r)
+			items = append(items, switchItem{
+				text:  r.project + "  " + m.label(r),
+				right: d.style.Render(strings.TrimSpace(d.glyph + " " + d.word)),
+				row:   r.session,
+			})
+		}
+	case scopeProjects:
+		index := map[string]int{}
+		count, waiting := map[string]int{}, map[string]int{}
+		for _, r := range m.all {
+			k := projectKey(r)
+			if _, ok := index[k]; !ok {
+				index[k] = len(items)
+				items = append(items, switchItem{text: k, row: r.session})
+			}
+			count[k]++
+			if s, ok := m.worktreeState(r); ok && r.running && s == status.Waiting {
+				waiting[k]++
+			}
+		}
+		for i := range items {
+			k := items[i].text
+			right := dimStyle.Render(fmt.Sprintf("%d worktrees", count[k]))
+			if waiting[k] > 0 {
+				right = waitingStyle.Render(fmt.Sprintf("◆ %d waiting", waiting[k])) + dimStyle.Render(" · ") + right
+			}
+			items[i].right = right
+		}
+	}
+	query := strings.ToLower(strings.TrimSpace(m.switchFilter))
+	if query == "" {
+		return items
+	}
+	return slices.DeleteFunc(items, func(it switchItem) bool {
+		hay := strings.ToLower(it.text)
+		for _, term := range strings.Fields(query) {
+			if !strings.Contains(hay, term) {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+// handleSwitchKey drives the open popup. ← and → change the scope; the switch
+// key and ↑/↓ move the choice; enter picks; esc leaves. Nothing reaches the
+// pane. Views are also picked by number, the other scopes filter on typing.
 func (m Model) handleSwitchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	r, ok := m.selected()
-	all := m.switchTargets(r, false)
-	if !ok || len(all) == 0 {
+	if _, ok := m.selected(); !ok {
 		m.mode = m.switchBack
 		return m, nil
 	}
+	items := m.switchItems()
 	key := msg.String()
-	move := func(d int) { m.switchSel = (m.switchSel + d + len(all)) % len(all) }
+	move := func(d int) {
+		if n := len(items); n > 0 {
+			m.switchSel = (m.switchSel + d + n) % n
+		}
+	}
+	setScope := func(scope int) {
+		m.switchScope = (scope + scopeCount) % scopeCount
+		m.switchSel, m.switchFilter = 0, ""
+		if m.switchScope == scopeViews {
+			m.switchSel = m.viewStart()
+		}
+	}
 	switch {
 	case key == "esc", key == "ctrl+c", key == `ctrl+\`, key == "ctrl+q":
 		m.mode = m.switchBack
 		return m, nil
+	case key == "left":
+		setScope(m.switchScope - 1)
+	case key == "right":
+		setScope(m.switchScope + 1)
 	case key == "enter":
-		return m.pickView(r, all[m.switchSel])
-	case key == m.switchKey(), key == "down", key == "tab", key == "ctrl+tab", key == "j":
+		if m.switchSel < len(items) {
+			return m.pickItem(items[m.switchSel])
+		}
+	case key == m.switchKey(), key == "down", key == "tab", key == "ctrl+tab":
 		move(1)
-	case key == "shift+"+m.switchKey(), key == "up", key == "shift+tab", key == "ctrl+shift+tab", key == "k":
+	case key == "shift+"+m.switchKey(), key == "up", key == "shift+tab", key == "ctrl+shift+tab":
 		move(-1)
-	default:
+	case m.switchScope == scopeViews:
 		i := jumpIndex(key)
-		if len(key) == 1 && key[0] >= '1' && key[0] <= '9' {
+		switch {
+		case len(key) == 1 && key[0] >= '1' && key[0] <= '9':
 			i = int(key[0] - '1')
+		case key == "j":
+			move(1)
+		case key == "k":
+			move(-1)
 		}
-		if i >= 0 && i < len(all) {
-			return m.pickView(r, all[i])
+		if i >= 0 && i < len(items) {
+			return m.pickItem(items[i])
 		}
+	default:
+		m.switchFilter = editText(m.switchFilter, msg)
+		m.switchSel = 0
 	}
 	return m, nil
 }
 
-// pickView closes the overlay and goes to the chosen stop.
-func (m Model) pickView(r row, t viewTarget) (tea.Model, tea.Cmd) {
-	m.mode = m.switchBack
-	return m.switchTo(r, t)
-}
-
-// switcherBox is the switcher as a small bordered popup, centred over the
-// screen: the views of the worktree, the choice marked, a line of keys below.
-// It returns the box's lines and leaves the splice to spliceBox.
-func (m Model) switcherBox() []string {
+// viewStart is the choice the Views scope opens on: the stop after the
+// current one.
+func (m Model) viewStart() int {
 	r, ok := m.selected()
 	if !ok {
+		return 0
+	}
+	all := m.switchTargets(r, false)
+	i := slices.Index(all, m.switchCurrent(r))
+	if i < 0 || len(all) == 0 {
+		return 0
+	}
+	return (i + 1) % len(all)
+}
+
+// pickItem closes the popup and goes where the item says.
+func (m Model) pickItem(it switchItem) (tea.Model, tea.Cmd) {
+	m.mode = m.switchBack
+	if it.row != "" {
+		return m.goToWorktree(it.row)
+	}
+	r, ok := m.selected()
+	if !ok {
+		return m, nil
+	}
+	return m.switchTo(r, it.view)
+}
+
+// goToWorktree puts the cursor on a worktree wherever it is: a filter that
+// hides it is cleared and the sections that fold it are opened. Focus is kept
+// when the agent there can take keys.
+func (m Model) goToWorktree(session string) (tea.Model, tea.Cmd) {
+	var target row
+	found := false
+	for _, r := range m.all {
+		if r.session == session {
+			target, found = r, true
+		}
+	}
+	if !found {
+		return m, nil
+	}
+	if m.filtering() {
+		m.search, m.attention = "", false
+		m.applyFilter()
+	}
+	next := m.withFold(orgID(target), false)
+	delete(next, projectID(target))
+	delete(next, groupID(target))
+	if len(next) != len(m.folds) {
+		m.setFolds(next)
+	}
+	i := slices.IndexFunc(m.rows, func(r row) bool { return r.session == session })
+	if i < 0 {
+		return m, nil
+	}
+	m.moveTo(item{kind: itemWorktree, id: session, row: i})
+	m.scroll = scrollState{}
+	if m.mode == modeFocus && !m.targetRunning(m.rows[i]) {
+		m.mode = modeList
+	}
+	return m, tea.Batch(m.startPreview(), m.readSelectedGit())
+}
+
+// switcherBox is the switcher as a bordered popup, centred over the screen:
+// the scope tabs, a filter line for the long scopes, the items with the choice
+// marked, and a line of keys. spliceBox puts it over the frame.
+func (m Model) switcherBox() []string {
+	if _, ok := m.selected(); !ok {
 		return nil
 	}
-	icons := m.icons()
-	var rows []string
-	for i, t := range m.switchTargets(r, false) {
-		label, state := t.view.label(), dimStyle.Render("not started")
-		if t.view == viewAgent {
-			a, _ := agentByID(r, t.agent)
-			label = m.agentLabel(a)
-			d := m.agentDisplay(a)
-			state = d.style.Render(d.word)
-			if !a.running {
-				state = idleStyle.Render("stopped")
-			}
-		} else if m.companions[tmux.CompanionName(t.view.kind(), r.session)] {
-			state = doneStyle.Render("running")
-		}
-		name := fmt.Sprintf("%d %s %s", i+1, icons.icon(t.view), label)
-		if i == m.switchSel {
-			rows = append(rows, focusHint.Render(" ▸ "+name)+"  "+state)
+	items := m.switchItems()
+	var tabs []string
+	for i, n := range scopeNames {
+		if i == m.switchScope {
+			tabs = append(tabs, focusHint.Render(n))
 		} else {
-			rows = append(rows, "   "+name+"  "+state)
+			tabs = append(tabs, dimStyle.Render(n))
 		}
 	}
-	keys := dimStyle.Render(" " + m.switchKey() + "/↑↓ choose · enter go · esc cancel")
+	rows := []string{" " + strings.Join(tabs, dimStyle.Render(" · ")), ""}
+	if m.switchScope != scopeViews {
+		rows = append(rows, " "+dimStyle.Render("filter ")+m.switchFilter+focusHint.Render("█"), "")
+	}
+	room := max(m.height-len(rows)-8, 3) // keeps the box on the screen
+	start := max(min(m.switchSel-room/2, len(items)-room), 0)
+	for i := start; i < min(start+room, len(items)); i++ {
+		it := items[i]
+		line := "   " + it.text + "  " + it.right
+		if i == m.switchSel {
+			line = focusHint.Render(" ▸ "+it.text) + "  " + it.right
+		}
+		rows = append(rows, line)
+	}
+	if len(items) == 0 {
+		rows = append(rows, " "+dimStyle.Render("nothing matches"))
+	}
+	keys := " ←/→ scope · " + m.switchKey() + "/↑↓ choose · enter go · esc"
+	if m.switchScope == scopeViews {
+		keys = " ←/→ scope · " + m.switchKey() + "/↑↓ · enter or 1-9 go · esc"
+	}
+	keys = dimStyle.Render(keys)
+
 	inner := ansi.StringWidth(keys) + 1
 	for _, row := range rows {
 		inner = max(inner, ansi.StringWidth(row)+2)
 	}
-	inner = min(max(inner, 30), m.width-2)
+	inner = min(max(inner, 44), m.width-2)
 
-	title := ansi.Truncate(" Switch view ", max(inner-2, 0), "…")
+	title := ansi.Truncate(" Switch ", max(inner-2, 0), "…")
 	top := focusHint.Render("╭─") + projectStyle.Render(title) +
 		focusHint.Render(strings.Repeat("─", max(inner-1-ansi.StringWidth(title), 0))+"╮")
 	side := focusHint.Render("│")

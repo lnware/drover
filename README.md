@@ -67,7 +67,7 @@ Press `?` in drover for the full list. The main ones:
 | `F`                 | fold every section, or unfold them all                                 |
 | `ctrl+\` / `ctrl+q` | leave focus mode (every other key goes to the pane)                    |
 | `ctrl+z`            | in focus mode: zoom the pane to the whole terminal, and back           |
-| `F12`               | open the view switcher popup: the worktree's agents, terminal and editor; `F12`/`↑↓` choose, `enter` or a number go, `esc` cancels (list and focus mode) |
+| `F12`               | open the switcher popup; `←`/`→` change its scope (views, worktrees, projects), `F12`/`↑↓` choose, `enter` goes, `esc` cancels (list and focus mode) |
 | `F1`-`F9` / `ctrl+1`-`9` | go straight to view 1-9, starting the terminal or editor if needed |
 | `PgUp` / `PgDn`     | scroll the output back / forward (MacBook: `Fn+↑` / `Fn+↓`)            |
 | `End` / `q` / `esc` | back to live output while scrolled                                     |
@@ -174,7 +174,12 @@ full screen: a real tmux attach with no capture in between.
 **Switching views.** One key, in the list and in focus mode: `F12` opens a switcher
 over the worktree's views (its agents, then terminal and editor), starting on the
 next one; `F12` again moves on, `enter` or a number goes there, `esc` cancels.
-`F1`-`F9` jump to the nth view at once, and the pane header numbers them. Function keys are the
+`F1`-`F9` jump to the nth view at once, and the pane header numbers them.
+In the popup `←`/`→` change the scope: **Views** (this worktree's agents,
+terminal and editor, picked by number), **Worktrees** (every worktree of every
+project, those needing attention first; type to filter) and **Projects** (type to
+filter; `enter` goes to the project's first worktree). Going to a worktree
+clears a filter that hides it and opens the sections that fold it. Function keys are the
 default because they reach drover through kitty and tmux unchanged
 (MacBook: `Fn+F12`, or set the keyboard to use F-keys as standard). `ctrl+tab`,
 `ctrl+shift+tab` and `ctrl+1`-`9` work as well when the terminal delivers them,
