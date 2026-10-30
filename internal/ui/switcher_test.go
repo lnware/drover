@@ -217,8 +217,12 @@ func TestSwitcherWorktreesScopeListsAttentionFirstAndFilters(t *testing.T) {
 func TestSwitcherProjectsScopeAndWrapping(t *testing.T) {
 	m := switcherScopeModel(t)
 	m = switcherPress(t, m, tea.KeyPressMsg{Code: tea.KeyF12}, tea.KeyPressMsg{Code: tea.KeyLeft})
+	if m.switchScope != scopeContexts {
+		t.Fatalf("left from the views wraps to the contexts: scope %d", m.switchScope)
+	}
+	m = switcherPress(t, m, tea.KeyPressMsg{Code: tea.KeyLeft})
 	if m.switchScope != scopeProjects {
-		t.Fatalf("left from the views wraps to the projects: scope %d", m.switchScope)
+		t.Fatalf("left again is the projects: scope %d", m.switchScope)
 	}
 	items := m.switchItems()
 	if len(items) != 3 || items[2].text != "Globex/tools" || !strings.Contains(ansi.Strip(items[2].right), "1 waiting") {
@@ -284,7 +288,7 @@ func TestSwitcherOpensOnTheScopeOfTheCursor(t *testing.T) {
 	}
 
 	// the Views scope has nothing to show on a header, and says so
-	v := switcherPress(t, g, tea.KeyPressMsg{Code: tea.KeyRight}, tea.KeyPressMsg{Code: tea.KeyRight})
+	v := switcherPress(t, g, tea.KeyPressMsg{Code: tea.KeyRight}, tea.KeyPressMsg{Code: tea.KeyRight}, tea.KeyPressMsg{Code: tea.KeyRight})
 	if v.switchScope != scopeViews || len(v.switchItems()) != 0 || !strings.Contains(ansi.Strip(v.render()), "select a worktree") {
 		t.Errorf("views on a header: scope %d, %d items", v.switchScope, len(v.switchItems()))
 	}

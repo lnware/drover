@@ -181,9 +181,18 @@ func TestContextsAndContextKeyFromTheConfig(t *testing.T) {
 		}
 		return c
 	}
-	c := load("[[context]]\nname = \"Work\"\nmatch = [\"Acme\", \"project:tools\"]\n\n[[context]]\nname = \" \"\nmatch = [\"x\"]\n\n[[context]]\nname = \"Free time\"\nmatch = [\"Personal\"]\n")
-	if len(c.Contexts) != 2 || c.Contexts[0].Name != "Work" || c.Contexts[1].Name != "Free time" || c.Contexts[0].Match[1] != "project:tools" {
-		t.Errorf("contexts keep their order and a nameless one is dropped: %+v", c.Contexts)
+	home, _ := os.UserHomeDir()
+	c := load("[[context]]\nname = \"Work\"\nprojects = [\"~/dev/acme/\", \"/srv/tools\"]\n\n[[context]]\nname = \" \"\nprojects = [\"/x\"]\n\n[[context]]\nname = \"Free time\"\nprojects = [\"/p/garden\"]\n")
+	if len(c.Contexts) != 2 || c.Contexts[0].Name != "Work" || c.Contexts[1].Name != "Free time" {
+		t.Fatalf("contexts keep their order and a nameless one is dropped: %+v", c.Contexts)
+	}
+	if got := c.Contexts[0].Projects; len(got) != 2 || got[0] != filepath.Join(home, "dev", "acme") || got[1] != "/srv/tools" {
+		t.Errorf("paths are home-expanded and cleaned: %v", got)
+	}
+	for path, want := range map[string]bool{"/dev/acme": true, "/dev/acme/infra": true, "/dev/acme-tools": false, "/dev/acm": false} {
+		if got := PathTakes("/dev/acme", path); got != want {
+			t.Errorf("a context path /dev/acme takes %s: %v, want %v", path, got, want)
+		}
 	}
 	if got := Default().ContextKey; got != "" {
 		t.Errorf("no context key by default: %q", got)

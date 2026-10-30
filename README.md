@@ -68,7 +68,7 @@ Press `?` in drover for the full list. The main ones:
 | `F`                 | fold every section, or unfold them all                                 |
 | `ctrl+\` / `ctrl+q` | leave focus mode (every other key goes to the pane)                    |
 | `ctrl+z`            | in focus mode: zoom the pane to the whole terminal, and back           |
-| `F12`               | open the switcher popup; `←`/`→` change its scope (views, worktrees, projects), `F12`/`↑↓` choose, `enter` goes, `esc` cancels (list and focus mode) |
+| `F12`               | open the switcher popup; `←`/`→` change its scope (views, worktrees, projects, contexts), `F12`/`↑↓` choose, `enter` goes, `esc` cancels (list and focus mode) |
 | `:`                 | the command line (list only): `ctx`, `wt`, `term`, `edit`, `new`, `config`, `reload`, `help`, `q` |
 | `F1`-`F9` / `ctrl+1`-`9` | go straight to view 1-9, starting the terminal or editor if needed |
 | `PgUp` / `PgDn`     | scroll the output back / forward (MacBook: `Fn+↑` / `Fn+↓`)            |
@@ -183,7 +183,8 @@ that header's own entry chosen. In it `←`/`→` change the scope: **Views** (t
 terminal and editor, picked by number), **Worktrees** (every worktree of every
 project, those needing attention first; type to filter) and **Projects** (type to
 filter; `enter` goes to the project's first worktree). Going to a worktree
-clears a filter that hides it and opens the sections that fold it. Function keys are the
+clears a filter that hides it and opens the sections that fold it. **Contexts**
+lists the contexts with their worktree and waiting counts; `enter` switches. Function keys are the
 default because they reach drover through kitty and tmux unchanged
 (MacBook: `Fn+F12`, or set the keyboard to use F-keys as standard). `ctrl+tab`,
 `ctrl+shift+tab` and `ctrl+1`-`9` work as well when the terminal delivers them,
@@ -197,18 +198,20 @@ below). The cursor returns to where you were in each, and the active context is
 remembered between runs. Notifications still arrive as before; in addition, what
 happened in a context while you were elsewhere is listed when you enter it.
 The worktree, project and attention lists in the switcher stay inside the active
-context. To group differently, name the contexts in the config; a `match` entry
-is an org or a project name (`org:Acme` and `project:infra` say which when it
-could be either), and whatever no context names ends up in an "Other" one:
+context. To group differently, name the contexts in the config with project paths. A
+path takes a project when it is the project's root or any folder above it, so
+`~/dev/acme` takes everything under it (which is what an org is: the folder that
+holds the project). Whatever no context takes ends up in an "Other" one, and a
+path that takes no project is reported when drover starts and on reload:
 
 ```toml
 [[context]]
 name = "Work"
-match = ["Acme"]
+projects = ["~/dev/acme"]
 
 [[context]]
 name = "Free time"
-match = ["Personal", "project:garden-app"]
+projects = ["~/dev/personal/garden-app", "~/dev/personal/home-lab"]
 ```
 
 **The command line.** `:` in the list opens a prompt in the footer with the

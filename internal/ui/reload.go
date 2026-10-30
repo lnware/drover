@@ -103,6 +103,7 @@ func (m Model) reloadConfig() (tea.Model, tea.Cmd) {
 	m.cfg = next
 	SetTheme(next.Theme)
 	m.notice = "config reloaded"
+	m.warnContextPaths()
 	if len(restart) > 0 {
 		m.notice += " · " + strings.Join(restart, " and ") + " change needs a restart"
 	}

@@ -17,14 +17,14 @@ import (
 // default).
 func oneContext(m Model) Model {
 	seen := map[string]bool{}
-	var match []string
+	var paths []string
 	for _, r := range m.all {
-		if !seen[r.org] {
-			seen[r.org] = true
-			match = append(match, r.org)
+		if !seen[r.root] {
+			seen[r.root] = true
+			paths = append(paths, r.root)
 		}
 	}
-	m.cfg.Contexts = []config.Context{{Name: "all", Match: match}}
+	m.cfg.Contexts = []config.Context{{Name: "all", Projects: paths}}
 	return m
 }
 
@@ -70,11 +70,11 @@ func TestEachOrgIsAContextByDefaultAndOnlyTheActiveOneIsListed(t *testing.T) {
 	}
 }
 
-func TestConfiguredContextsMatchOrgsAndProjectsAndLeaveAnOtherContext(t *testing.T) {
+func TestConfiguredContextsTakeProjectPathsAndLeaveAnOtherContext(t *testing.T) {
 	m := contextModel(t)
 	m.cfg.Contexts = []config.Context{
-		{Name: "Work", Match: []string{"infra"}},             // a project name
-		{Name: "Free time", Match: []string{"org:Personal"}}, // an org, spelled out
+		{Name: "Work", Projects: []string{"/infra"}},
+		{Name: "Free time", Projects: []string{"/garden-app"}},
 	}
 	defs := m.contexts()
 	if len(defs) != 3 || defs[2].name != "Other" {
@@ -85,9 +85,37 @@ func TestConfiguredContextsMatchOrgsAndProjectsAndLeaveAnOtherContext(t *testing
 			t.Errorf("%s is in context %d, want %d", m.all[i].session, got, want)
 		}
 	}
-	// a name that is only an org does not match a project of that name
-	if (ctxDef{match: []string{"project:Acme"}}).has(m.all[0]) {
-		t.Error("project: must not match an org")
+}
+
+// a path takes a project when it is the project's root or a folder above it,
+// and "/dev/acme" must not take "/dev/acme-tools".
+func TestAContextPathTakesTheProjectOrWhatIsUnderIt(t *testing.T) {
+	m := contextModel(t)
+	rows := []row{
+		{org: "Acme", project: "infra", root: "/dev/acme/infra"},
+		{org: "Acme", project: "web", root: "/dev/acme/web"},
+		{org: "Acme", project: "tools", root: "/dev/acme-tools/tools"},
+	}
+	m.all = rows
+	m.cfg.Contexts = []config.Context{{Name: "Acme", Projects: []string{"/dev/acme"}}, {Name: "One", Projects: []string{"/dev/acme-tools/tools"}}}
+	defs := m.contexts()
+	for i, want := range []int{0, 0, 1} {
+		if got := contextOf(defs, rows[i]); got != want {
+			t.Errorf("%s: context %d, want %d", rows[i].root, got, want)
+		}
+	}
+}
+
+func TestAContextPathThatTakesNoProjectIsReported(t *testing.T) {
+	m := contextModel(t)
+	m.cfg.Projects = []string{"/dev/acme/infra"}
+	m.cfg.Contexts = []config.Context{{Name: "Work", Projects: []string{"/dev/acme"}}, {Name: "Typo", Projects: []string{"/dev/acmee"}}}
+	if bad := m.cfg.UnmatchedContextPaths(); len(bad) != 1 || bad[0] != "Typo: /dev/acmee" {
+		t.Fatalf("only the typo is reported: %v", bad)
+	}
+	m.warnContextPaths()
+	if !strings.Contains(m.status, "/dev/acmee") {
+		t.Errorf("the warning reaches the footer: %q", m.status)
 	}
 }
 
@@ -189,5 +217,45 @@ func TestAgentsOutsideTheContextCountOnTheTabAndFillTheDigest(t *testing.T) {
 	s, _ := m2.Update(tea.KeyPressMsg{Code: tea.KeyF11})
 	if g := s.(Model); g.mode == modeDigest {
 		t.Error("an agent that is working again is not news")
+	}
+}
+
+func TestSwitcherHasAContextsScope(t *testing.T) {
+	m := contextModel(t)
+	m.all[2].running = true
+	m.agents = map[string]status.Entry{"garden-app/main": {State: status.Waiting}}
+	right := tea.KeyPressMsg{Code: tea.KeyRight}
+	m = typed(t, m, tea.KeyPressMsg{Code: tea.KeyF12}, right, right, right)
+	if m.switchScope != scopeContexts {
+		t.Fatalf("the fourth scope is Contexts: %d", m.switchScope)
+	}
+	items := m.switchItems()
+	if len(items) != 2 || items[0].ctx != "Acme" || items[1].ctx != "Personal" {
+		t.Fatalf("the contexts in order: %+v", items)
+	}
+	if !strings.Contains(ansi.Strip(items[0].right), "current") || !strings.Contains(ansi.Strip(items[1].right), "1 waiting") {
+		t.Errorf("the current one is marked and waiting agents counted: %q / %q", ansi.Strip(items[0].right), ansi.Strip(items[1].right))
+	}
+	if m.switchSel != 1 {
+		t.Errorf("the choice starts on the next context, as :ctx would go: %d", m.switchSel)
+	}
+	shown := ansi.Strip(m.render())
+	for _, want := range []string{"Views · Worktrees · Projects · Contexts", "▸ Personal"} {
+		if !strings.Contains(shown, want) {
+			t.Errorf("the popup lacks %q:\n%s", want, shown)
+		}
+	}
+	m = typed(t, m, enter())
+	if m.mode != modeList || m.ctxActive != "Personal" || m.rows[0].project != "garden-app" {
+		t.Fatalf("enter switches context: mode %d ctx %q", m.mode, m.ctxActive)
+	}
+
+	// with one context there is nothing to pick, and the popup says so
+	one := contextModel(t)
+	one.all = one.all[:2]
+	one.applyFilter()
+	one = typed(t, one, tea.KeyPressMsg{Code: tea.KeyF12}, tea.KeyPressMsg{Code: tea.KeyLeft})
+	if !strings.Contains(ansi.Strip(one.render()), "only one context") {
+		t.Errorf("a single context says so:\n%s", ansi.Strip(one.render()))
 	}
 }

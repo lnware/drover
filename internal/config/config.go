@@ -5,17 +5,19 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 )
 
-// Context is a named set of worktrees shown together. Match lists org or
-// project names; "org:Acme" or "project:infra" say which when a name is both.
-// A row that no context matches falls into an implicit "Other" context.
+// Context is a named set of worktrees shown together. Projects lists paths: a
+// path takes a project when it is the project's root or a folder above it, so
+// "~/dev/acme" takes everything under it. A project that no context takes falls
+// into an implicit "Other" context.
 type Context struct {
-	Name  string   `toml:"name"`
-	Match []string `toml:"match"`
+	Name     string   `toml:"name"`
+	Projects []string `toml:"projects"`
 }
 
 type Config struct {
@@ -127,9 +129,17 @@ func Load(path string) (Config, error) {
 	var contexts []Context
 	for _, c := range cfg.Contexts {
 		c.Name = strings.TrimSpace(c.Name)
-		if c.Name != "" { // a context without a name cannot be shown or switched to
-			contexts = append(contexts, c)
+		if c.Name == "" { // a context without a name cannot be shown or switched to
+			continue
 		}
+		paths := make([]string, 0, len(c.Projects))
+		for _, p := range c.Projects {
+			if p = strings.TrimSpace(p); p != "" {
+				paths = append(paths, filepath.Clean(ExpandHome(p)))
+			}
+		}
+		c.Projects = paths
+		contexts = append(contexts, c)
 	}
 	cfg.Contexts = contexts
 	return cfg, nil
@@ -175,4 +185,25 @@ func EnsureFile(path string) error {
 		return err
 	}
 	return os.WriteFile(path, []byte(template), 0o644)
+}
+
+// UnmatchedContextPaths lists the context paths that take no configured
+// project, as "Context: path", so a typo shows up instead of leaving a
+// context empty.
+func (c Config) UnmatchedContextPaths() []string {
+	var out []string
+	for _, ctx := range c.Contexts {
+		for _, p := range ctx.Projects {
+			if !slices.ContainsFunc(c.Projects, func(root string) bool { return PathTakes(p, filepath.Clean(root)) }) {
+				out = append(out, ctx.Name+": "+p)
+			}
+		}
+	}
+	return out
+}
+
+// PathTakes reports whether a context path takes a project root: it is the
+// root itself or a folder above it.
+func PathTakes(path, root string) bool {
+	return root == path || strings.HasPrefix(root, strings.TrimSuffix(path, string(filepath.Separator))+string(filepath.Separator))
 }

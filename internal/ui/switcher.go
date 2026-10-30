@@ -122,10 +122,11 @@ const (
 	scopeViews = iota
 	scopeWorktrees
 	scopeProjects
+	scopeContexts
 	scopeCount
 )
 
-var scopeNames = [scopeCount]string{"Views", "Worktrees", "Projects"}
+var scopeNames = [scopeCount]string{"Views", "Worktrees", "Projects", "Contexts"}
 
 // switchItem is one line of the popup.
 type switchItem struct {
@@ -133,6 +134,7 @@ type switchItem struct {
 	right string     // the styled state at the end of the line
 	view  viewTarget // scopeViews
 	row   string     // scopeWorktrees and scopeProjects: the session to go to
+	ctx   string     // scopeContexts: the context's name
 }
 
 // projectKey names a project the way the list does: "Acme/infra", or just
@@ -208,6 +210,19 @@ func (m Model) switchItems() []switchItem {
 			}
 			items[i].right = right
 		}
+	case scopeContexts:
+		defs := m.contexts()
+		cur := m.activeContext(defs)
+		for i, d := range defs {
+			right := dimStyle.Render(fmt.Sprintf("%d worktrees", len(m.contextRowsOf(defs, i))))
+			if n := m.waitingIn(defs, i); n > 0 {
+				right = waitingStyle.Render(fmt.Sprintf("◆ %d waiting", n)) + dimStyle.Render(" · ") + right
+			}
+			if i == cur {
+				right = focusHint.Render("current") + dimStyle.Render(" · ") + right
+			}
+			items = append(items, switchItem{text: d.name, right: right, ctx: d.name})
+		}
 	}
 	query := strings.ToLower(strings.TrimSpace(m.switchFilter))
 	if query == "" {
@@ -276,8 +291,13 @@ func (m Model) handleSwitchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	setScope := func(scope int) {
 		m.switchScope = (scope + scopeCount) % scopeCount
 		m.switchSel, m.switchFilter = 0, ""
-		if m.switchScope == scopeViews {
+		switch m.switchScope {
+		case scopeViews:
 			m.switchSel = m.viewStart()
+		case scopeContexts:
+			if defs := m.contexts(); defs != nil {
+				m.switchSel = (m.activeContext(defs) + 1) % len(defs) // on the next one, as ":ctx" would go
+			}
 		}
 	}
 	switch {
@@ -334,6 +354,13 @@ func (m Model) viewStart() int {
 // pickItem closes the popup and goes where the item says.
 func (m Model) pickItem(it switchItem) (tea.Model, tea.Cmd) {
 	m.mode = m.switchBack
+	if it.ctx != "" {
+		defs := m.contexts()
+		if i := slices.IndexFunc(defs, func(d ctxDef) bool { return d.name == it.ctx }); i >= 0 {
+			return m.switchContextTo(defs, i)
+		}
+		return m, nil
+	}
 	if it.row != "" {
 		return m.goToWorktree(it.row)
 	}
@@ -411,6 +438,9 @@ func (m Model) switcherBox() []string {
 		msg := "nothing matches"
 		if _, ok := m.selected(); !ok && m.switchScope == scopeViews {
 			msg = "select a worktree to see its views"
+		}
+		if m.switchScope == scopeContexts && m.contexts() == nil {
+			msg = "only one context: add [[context]] entries to the config"
 		}
 		rows = append(rows, " "+dimStyle.Render(msg))
 	}

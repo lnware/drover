@@ -124,9 +124,10 @@ type Model struct {
 	switchBack mode
 	// contexts: the active one by name, the worktree last used in each, what
 	// happened in the others, and the digest shown on entering one.
-	ctxActive string
-	ctxLast   map[string]string
-	ctxPrev   string // the context before this one, for ":ctx -"
+	ctxActive  string
+	ctxLast    map[string]string
+	ctxChecked bool   // the context paths were checked once, after the first listing
+	ctxPrev    string // the context before this one, for ":ctx -"
 	// the command line: what is typed, the chosen suggestion, and the history
 	// of what was run (cmdPos counts back into it while it is browsed).
 	cmdInput     string
@@ -282,6 +283,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.startPreview()
 	case refreshed:
 		m.all, m.errs, m.aliases = msg.rows, msg.errs, msg.aliases
+		if !m.ctxChecked {
+			m.ctxChecked = true
+			m.warnContextPaths()
+		}
 		was, wasSession := m.sub, m.selSession
 		m.setCompanions(msg.companions)
 		m.applyFilter()

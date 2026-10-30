@@ -21,26 +21,23 @@ import (
 // configured, each org is a context; with fewer than two there is nothing to
 // switch between and the feature stays out of sight.
 
-// ctxDef is a context as the list sees it.
+// ctxDef is a context as the list sees it: either a set of project paths
+// (configured), or one org (the default, when none are configured).
 type ctxDef struct {
-	name  string
-	match []string
-	other bool // the implicit one: whatever no other context takes
+	name   string
+	paths  []string
+	byOrg  bool // a default context: it takes the rows of one org
+	org    string
+	isRest bool // the implicit one: whatever no other context takes
 }
 
-// has reports whether a row is one the context names.
+// has reports whether a row is one the context takes.
 func (c ctxDef) has(r row) bool {
-	for _, entry := range c.match {
-		kind, val := "", entry
-		if k, v, ok := strings.Cut(entry, ":"); ok && (k == "org" || k == "project") {
-			kind, val = k, v
-		}
-		val = strings.TrimSpace(val)
-		if (kind != "project" && strings.EqualFold(val, r.org)) || (kind != "org" && strings.EqualFold(val, r.project)) {
-			return true
-		}
+	if c.byOrg {
+		return r.org == c.org
 	}
-	return false
+	root := filepath.Clean(r.root)
+	return slices.ContainsFunc(c.paths, func(p string) bool { return config.PathTakes(p, root) })
 }
 
 // contexts lists the contexts in order, or nil when there is nothing to
@@ -49,10 +46,10 @@ func (m Model) contexts() []ctxDef {
 	var defs []ctxDef
 	if len(m.cfg.Contexts) > 0 {
 		for _, c := range m.cfg.Contexts {
-			defs = append(defs, ctxDef{name: c.Name, match: c.Match})
+			defs = append(defs, ctxDef{name: c.Name, paths: c.Projects})
 		}
 		if slices.ContainsFunc(m.all, func(r row) bool { return contextOf(defs, r) < 0 }) {
-			defs = append(defs, ctxDef{name: "Other", other: true})
+			defs = append(defs, ctxDef{name: "Other", isRest: true})
 		}
 	} else {
 		seen := map[string]bool{}
@@ -65,7 +62,7 @@ func (m Model) contexts() []ctxDef {
 			if name == "" {
 				name = "Other"
 			}
-			defs = append(defs, ctxDef{name: name, match: []string{"org:" + r.org}, other: r.org == ""})
+			defs = append(defs, ctxDef{name: name, byOrg: true, org: r.org})
 		}
 	}
 	if len(defs) < 2 {
@@ -78,12 +75,12 @@ func (m Model) contexts() []ctxDef {
 // names it, else the implicit "Other" one, else -1.
 func contextOf(defs []ctxDef, r row) int {
 	for i, d := range defs {
-		if !d.other && d.has(r) {
+		if !d.isRest && d.has(r) {
 			return i
 		}
 	}
 	for i, d := range defs {
-		if d.other {
+		if d.isRest {
 			return i
 		}
 	}
@@ -355,5 +352,13 @@ func saveContext(active string, last map[string]string) {
 	cerr := tmp.Close()
 	if werr != nil || cerr != nil || os.Rename(tmp.Name(), path) != nil {
 		_ = os.Remove(tmp.Name())
+	}
+}
+
+// warnContextPaths says so when a context names a path no project is under,
+// which is most likely a typo.
+func (m *Model) warnContextPaths() {
+	if bad := m.cfg.UnmatchedContextPaths(); len(bad) > 0 {
+		m.status = "context path takes no project: " + strings.Join(bad, ", ")
 	}
 }
