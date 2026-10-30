@@ -42,6 +42,7 @@ const (
 	modeSearch
 	modeRename
 	modeNameAgent // typing the name of a new agent session (agent_actions.go)
+	modeSwitch    // the view switcher overlay is open (switcher.go)
 )
 
 type row struct {
@@ -116,7 +117,10 @@ type Model struct {
 	renameAgent    string
 	nameFor        string
 	nameContinuing bool
-	moveSession    string // worktree whose branch and folder the M prompt renames
+	// the view switcher: the choice in the overlay, and the mode to go back to.
+	switchSel   int
+	switchBack  mode
+	moveSession string // worktree whose branch and folder the M prompt renames
 
 	input   string
 	newRoot string
@@ -349,6 +353,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleNameAgentKey(msg)
 		case modeMoveBranch:
 			return m.handleMoveKey(msg)
+		case modeSwitch:
+			return m.handleSwitchKey(msg)
 		}
 		return m.handleKey(msg)
 	case tea.PasteMsg:
@@ -552,6 +558,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if c, ok := m.scrollListKey(msg); ok {
 		return m, c
 	}
+	if step, jump, ok := m.switchKeyPressed(key); ok {
+		return m.switchView(step, jump)
+	}
 	switch key {
 	case "q", "ctrl+c":
 		return m, tea.Quit
@@ -734,6 +743,9 @@ func (m Model) handleFocusKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeList
 		// The agent may have changed files while you were typing to it.
 		return m, tea.Batch(m.startPreview(), m.readSelectedGit())
+	}
+	if step, jump, ok := m.switchKeyPressed(msg.String()); ok {
+		return m.switchView(step, jump)
 	}
 	r, ok := m.selected()
 	if !ok || !m.targetRunning(r) {

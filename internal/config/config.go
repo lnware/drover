@@ -39,6 +39,13 @@ type Config struct {
 	// key on every keyboard layout. Bubble Tea key names ("ctrl+z", "f10",
 	// "alt+z"); ctrl+\ and ctrl+q are taken by "leave focus".
 	ZoomKey string `toml:"zoom_key"`
+	// SwitchKey moves to the next view of the worktree (its agents, then the
+	// terminal and the editor), in the list and in focus mode alike. F1 to F9
+	// and ctrl+1 to ctrl+9 jump straight to the nth view and are not
+	// configurable. A function key is the default because it reaches drover
+	// through kitty and tmux as they come; ctrl+tab and ctrl+space need
+	// settings that not every setup has (and ctrl+space is often tmux's own).
+	SwitchKey string `toml:"switch_key"`
 	// Background paints the title bar, the list and the footer in the theme's
 	// background, so a terminal background image or opacity does not show
 	// through them. The pane that shows an agent is never painted.
@@ -55,7 +62,7 @@ type Config struct {
 }
 
 func Default() Config {
-	return Config{AgentCmd: "claude", Socket: "drover", Icons: "unicode", Background: true, Mouse: true, ZoomKey: DefaultZoomKey}
+	return Config{AgentCmd: "claude", Socket: "drover", Icons: "unicode", Background: true, Mouse: true, ZoomKey: DefaultZoomKey, SwitchKey: DefaultSwitchKey}
 }
 
 func Path() string {
@@ -91,8 +98,16 @@ func Load(path string) (Config, error) {
 	case "", `ctrl+\`, "ctrl+q": // unset, or a key that already leaves focus
 		cfg.ZoomKey = DefaultZoomKey
 	}
+	cfg.SwitchKey = strings.ToLower(strings.TrimSpace(cfg.SwitchKey))
+	switch cfg.SwitchKey {
+	case "", `ctrl+\`, "ctrl+q", cfg.ZoomKey: // unset, or a key that is already taken
+		cfg.SwitchKey = DefaultSwitchKey
+	}
 	return cfg, nil
 }
+
+// DefaultSwitchKey is the next-view key when the config sets none.
+const DefaultSwitchKey = "f12"
 
 // DefaultZoomKey is the zoom toggle when the config sets none (or a bad one).
 const DefaultZoomKey = "ctrl+z"

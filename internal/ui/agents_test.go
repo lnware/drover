@@ -188,7 +188,7 @@ func TestAgentBreadcrumbAndStoppedHint(t *testing.T) {
 	m.all = m.rows
 	m.step(1) // onto the stopped agent's row
 	plain := ansi.Strip(m.render())
-	for _, want := range []string{"main › old work", "stopped", "old work is stopped. Press enter (or v) to resume it, x to forget it."} {
+	for _, want := range []string{"1 ◈ old work  2 $ terminal  3 ✎ editor", "stopped", "old work is stopped. Press enter (or v) to resume it, x to forget it."} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("the pane lacks %q:\n%s", want, plain)
 		}

@@ -147,6 +147,8 @@ func (m Model) footer() string {
 		s = hintLine("SEARCH /"+m.search+"█", []hint{{"enter", "keep filter", 1}, {"esc", "clear", 1}, {"↑/↓", "move", 2}}, w)
 	case m.mode == modeNameAgent:
 		s = hintLine("NEW AGENT", []hint{{"enter", "start (empty: suggested name)", 1}, {"esc", "cancel", 1}, {"ctrl+u", "clear", 2}}, w)
+	case m.mode == modeSwitch:
+		s = hintLine("SWITCH", []hint{{m.switchKey(), "next", 1}, {"enter", "go", 1}, {"1-9", "pick", 2}, {"esc", "cancel", 1}}, w)
 	case m.mode == modeRename:
 		s = hintLine("RENAME", []hint{{"enter", "save (empty clears)", 1}, {"esc", "cancel", 1}, {"ctrl+u", "clear", 2}}, w)
 	case m.mode == modeMoveBranch:
@@ -156,7 +158,7 @@ func (m Model) footer() string {
 	case m.mode == modeNew:
 		s = hintLine("NEW WORKTREE", []hint{{"enter", "create", 1}, {"esc", "cancel", 1}, {"ctrl+u", "clear", 2}}, w)
 	case m.mode == modeFocus:
-		s = hintLine("FOCUS", []hint{{"ctrl+\\ / ctrl+q", "back", 1}, {m.zoomKey(), "zoom", 2}, {"", "every other key goes to the pane", 3}}, w)
+		s = hintLine("FOCUS", []hint{{"ctrl+\\ / ctrl+q", "back", 1}, {m.switchKey(), "switch view", 1}, {"f1-f9", "go to view", 2}, {m.zoomKey(), "zoom", 3}, {"", "every other key goes to the pane", 4}}, w)
 	default:
 		s = hintLine("", m.listHints(), w)
 	}
@@ -254,6 +256,8 @@ func (m Model) rightLines(w, h int) []string {
 		lines = append(lines, m.renameLines()...)
 	case m.mode == modeNameAgent:
 		lines = append(lines, m.nameAgentLines()...)
+	case m.mode == modeSwitch:
+		lines = append(lines, m.switcherLines()...)
 	case m.mode == modeMoveBranch:
 		lines = append(lines, m.renameBranchLines()...)
 	case m.help:
@@ -279,6 +283,8 @@ func (m Model) helpLines() []string {
 		{"F", "fold or unfold everything"},
 		{"ctrl+\\ / ctrl+q", "leave focus mode"},
 		{m.zoomKey(), "zoom the focused pane to the whole terminal, and back"},
+		{m.switchKey(), "open the view switcher: agents, terminal, editor (list and focus mode)"},
+		{"f1-f9 / ctrl+1-9", "go straight to view 1-9, starting the terminal or editor if needed"},
 		{"PgUp PgDn", "scroll output back (list: also ctrl+u/d)"},
 		{"End q esc", "back to live output"},
 		{"mouse", "click selects/focuses, wheel scrolls"},
@@ -370,6 +376,9 @@ func (m Model) newLines() []string {
 func (m Model) headerTitle(r row) string {
 	name := m.label(r)
 	title := projectStyle.Render(name)
+	if strip := m.switcherStrip(r); strip != "" { // the switcher's numbered views replace the breadcrumb
+		return title + "  " + strip
+	}
 	if v := m.viewOf(r); v != viewAgent { // breadcrumb: worktree › terminal
 		title += dimStyle.Render(" › ") + focusHint.Render(v.label())
 	} else if a, ok := m.agentUnderCursor(r); ok { // worktree › feature-a

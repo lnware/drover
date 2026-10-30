@@ -45,6 +45,7 @@ theme = "jetbrains"    # or "catppuccin" (mocha), "catppuccin-macchiato", "catpp
 background = true     # paint the list, title bar and footer in the theme colour
 mouse = true           # click and wheel support; false leaves the mouse to the terminal
 zoom_key = "ctrl+z"    # focus mode: zoom the pane to the whole terminal, and back
+switch_key = "f12"     # opens the view switcher (agents, terminal, editor); F1-F9 jump
 terminal_cmd = ""      # `T`: defaults to $SHELL
 editor_cmd = ""        # `o`: defaults to `hx .`, else `$EDITOR .`, else `vi .`
 lazygit_cmd = ""       # `G`: defaults to `lazygit`
@@ -66,6 +67,8 @@ Press `?` in drover for the full list. The main ones:
 | `F`                 | fold every section, or unfold them all                                 |
 | `ctrl+\` / `ctrl+q` | leave focus mode (every other key goes to the pane)                    |
 | `ctrl+z`            | in focus mode: zoom the pane to the whole terminal, and back           |
+| `F12`               | open the view switcher: the worktree's agents, terminal and editor; `F12`/`↑↓` choose, `enter` or a number go, `esc` cancels (list and focus mode) |
+| `F1`-`F9` / `ctrl+1`-`9` | go straight to view 1-9, starting the terminal or editor if needed |
 | `PgUp` / `PgDn`     | scroll the output back / forward (MacBook: `Fn+↑` / `Fn+↓`)            |
 | `End` / `q` / `esc` | back to live output while scrolled                                     |
 | `n`                 | new worktree: type `feature/my-change`, enter creates it               |
@@ -167,6 +170,16 @@ popup or window is hidden, and resumes at once when it is shown again. With
 key restores the split. `zoom_key` changes it (Bubble Tea key names such as
 `"f10"`; `ctrl+\` and `ctrl+q` are reserved for leaving focus). `A` is the other
 full screen: a real tmux attach with no capture in between.
+
+**Switching views.** One key, in the list and in focus mode: `F12` opens a switcher
+over the worktree's views (its agents, then terminal and editor), starting on the
+next one; `F12` again moves on, `enter` or a number goes there, `esc` cancels.
+`F1`-`F9` jump to the nth view at once, and the pane header numbers them. Function keys are the
+default because they reach drover through kitty and tmux unchanged
+(MacBook: `Fn+F12`, or set the keyboard to use F-keys as standard). `ctrl+tab`,
+`ctrl+shift+tab` and `ctrl+1`-`9` work as well when the terminal delivers them,
+which needs `extended-keys` in tmux and, in kitty, an unmapped `ctrl+tab`.
+`switch_key` changes the key that opens the switcher.
 
 ## Themes
 

@@ -141,3 +141,30 @@ func TestBackgroundDefaultsOnAndCanBeSwitchedOff(t *testing.T) {
 		t.Error("background = false was ignored")
 	}
 }
+
+func TestSwitchKeyDefaultsAndRefusesTakenKeys(t *testing.T) {
+	load := func(body string) string {
+		path := filepath.Join(t.TempDir(), "config.toml")
+		if err := os.WriteFile(path, []byte(body+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		c, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.SwitchKey
+	}
+	if got := Default().SwitchKey; got != DefaultSwitchKey {
+		t.Errorf("default = %q", got)
+	}
+	for body, want := range map[string]string{
+		`socket = "x"`:          DefaultSwitchKey,
+		`switch_key = "F11"`:    "f11",
+		`switch_key = "ctrl+q"`: DefaultSwitchKey, // leaves focus
+		`zoom_key = "f12"` + "\n" + `switch_key = "f12"`: DefaultSwitchKey, // the zoom key
+	} {
+		if got := load(body); got != want {
+			t.Errorf("%s: switch key %q, want %q", body, got, want)
+		}
+	}
+}
