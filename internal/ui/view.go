@@ -183,7 +183,7 @@ func (m Model) footer() string {
 	case m.mode == modeFocus:
 		s = hintLine("FOCUS", []hint{{"ctrl+\\ / ctrl+q", "back", 1}, {m.switchKey(), "switch view", 1}, {"f1-f9", "go to view", 2}, {m.zoomKey(), "zoom", 3}, {"", "every other key goes to the pane", 4}}, w)
 	default:
-		hints := append(m.listHints(), hint{":", "command", 4})
+		hints := append(m.listHints(), hint{"tab", "next needing you", 3}, hint{":", "command", 4})
 		s = hintLine("", hints, w)
 	}
 	return fit(s, w)
@@ -305,6 +305,7 @@ func (m Model) helpLines() []string {
 		{"F", "fold or unfold everything"},
 		{"ctrl+\\ / ctrl+q", "leave focus mode"},
 		{m.zoomKey(), "zoom the focused pane to the whole terminal, and back"},
+		{"tab / shift+tab", "go to the next / previous agent that waits, finished or failed in this context (the list)"},
 		{":", "command line: ctx (switch context), wt (jump to a worktree), term, edit, new, config, reload, help, q"},
 		{m.switchKey(), "open the switcher: ←/→ views of this worktree, every worktree, every project (list and focus mode)"},
 		{"f1-f9 / ctrl+1-9", "go straight to view 1-9, starting the terminal or editor if needed"},

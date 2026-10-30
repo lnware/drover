@@ -45,6 +45,7 @@ theme = "jetbrains"    # or "catppuccin" (mocha), "catppuccin-macchiato", "catpp
 background = true     # paint the list, title bar and footer in the theme colour
 mouse = true           # click and wheel support; false leaves the mouse to the terminal
 zoom_key = "ctrl+z"    # focus mode: zoom the pane to the whole terminal, and back
+next_key = ""          # optional key for the next agent that needs you (shift+ for the previous)
 context_key = ""       # optional key for the next context (shift+ for the previous), e.g. "f11"
 switch_key = "f12"     # opens the view switcher (agents, terminal, editor); F1-F9 jump
 terminal_cmd = ""      # `T`: defaults to $SHELL
@@ -69,7 +70,8 @@ Press `?` in drover for the full list. The main ones:
 | `ctrl+\` / `ctrl+q` | leave focus mode (every other key goes to the pane)                    |
 | `ctrl+z`            | in focus mode: zoom the pane to the whole terminal, and back           |
 | `F12`               | open the switcher popup; `←`/`→` change its scope (views, worktrees, projects, contexts), `F12`/`↑↓` choose, `enter` goes, `esc` cancels (list and focus mode) |
-| `:`                 | the command line (list only): `ctx`, `wt`, `term`, `edit`, `new`, `config`, `reload`, `help`, `q` |
+| `tab` / `shift+tab` | go to the next / previous agent that waits, finished or failed, in this context (list; `next_key` sets a key that also works in focus mode) |
+| `:`                 | the command line (list only): `ctx`, `wt`, `next`, `term`, `edit`, `new`, `config`, `reload`, `help`, `q` |
 | `F1`-`F9` / `ctrl+1`-`9` | go straight to view 1-9, starting the terminal or editor if needed |
 | `PgUp` / `PgDn`     | scroll the output back / forward (MacBook: `Fn+↑` / `Fn+↓`)            |
 | `End` / `q` / `esc` | back to live output while scrolled                                     |
@@ -222,6 +224,7 @@ chosen one, `esc` cancels, and `↑` on an empty line recalls the last command.
 | --------------- | ---------------------------------------------------------------- |
 | `ctx [name\|-]` | switch context: the next one, a name (a prefix is enough), or back |
 | `wt <name>`     | jump to a worktree of this context by project or branch          |
+| `next`          | go to the next agent that needs you                              |
 | `agent` `term` `edit` | show the agent, open the terminal or the editor            |
 | `new` `config` `reload` `help` `q` | the keys `n`, `c`, `R`, `?` and `q`            |
 

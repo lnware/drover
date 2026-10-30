@@ -199,7 +199,7 @@ func TestContextsAndContextKeyFromTheConfig(t *testing.T) {
 	}
 	for body, want := range map[string]string{
 		`socket = "x"`:                               "",
-		`context_key = "F8"`:                         "f8",
+		`context_key = "F10"`:                        "f10",
 		`context_key = "ctrl+q"`:                     "", // leaves focus
 		`context_key = "f12"`:                        "", // the switch key
 		`zoom_key = "f9"` + "\ncontext_key = \"f9\"": "",
@@ -207,5 +207,35 @@ func TestContextsAndContextKeyFromTheConfig(t *testing.T) {
 		if got := load(body).ContextKey; got != want {
 			t.Errorf("%s: context key %q, want %q", body, got, want)
 		}
+	}
+}
+
+func TestNextKeyIsOptionalAndRefusesKeysThatAreTaken(t *testing.T) {
+	load := func(body string) Config {
+		path := filepath.Join(t.TempDir(), "config.toml")
+		if err := os.WriteFile(path, []byte(body+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		c, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	for body, want := range map[string]string{
+		`socket = "x"`:        "",
+		`next_key = "F10"`:    "f10",
+		`next_key = "f8"`:     "", // jumps to the 8th view
+		`next_key = "ctrl+2"`: "",
+		`next_key = "ctrl+q"`: "",
+		`next_key = "f12"`:    "", // opens the switcher
+		`context_key = "f10"` + "\nnext_key = \"f10\"": "",
+	} {
+		if got := load(body).NextKey; got != want {
+			t.Errorf("%s: next key %q, want %q", body, got, want)
+		}
+	}
+	if got := load(`context_key = "f9"`).ContextKey; got != "" {
+		t.Errorf("a context key may not be a jump key: %q", got)
 	}
 }

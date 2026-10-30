@@ -601,7 +601,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if step, ok := m.contextStep(key); ok {
 		return m.switchContext(step)
 	}
+	if step, ok := m.nextStep(key); ok {
+		return m.nextNeeding(step)
+	}
 	switch key {
+	case "tab":
+		return m.nextNeeding(1)
+	case "shift+tab":
+		return m.nextNeeding(-1)
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "?":
@@ -791,6 +798,9 @@ func (m Model) handleFocusKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if step, ok := m.contextStep(msg.String()); ok {
 		return m.switchContext(step)
+	}
+	if step, ok := m.nextStep(msg.String()); ok {
+		return m.nextNeeding(step)
 	}
 	r, ok := m.selected()
 	if !ok || !m.targetRunning(r) {

@@ -61,6 +61,11 @@ type Config struct {
 	// default: ":ctx" in the list switches context. A function key is the
 	// safe choice, for the reasons SwitchKey gives.
 	ContextKey string `toml:"context_key"`
+	// NextKey is an optional key that jumps to the next agent that needs you
+	// (shift+ the key to the previous), in the list and in focus mode. Empty
+	// by default: tab and shift+tab do it in the list. Like ContextKey, a
+	// function key is the safe choice.
+	NextKey string `toml:"next_key"`
 	// Contexts group the list into the things you work on one at a time: only
 	// the active one is shown. Without any, every org is a context of its own.
 	Contexts []Context `toml:"context"`
@@ -123,8 +128,12 @@ func Load(path string) (Config, error) {
 	}
 	// No context key by default: ":ctx" is the way, and a key is opt-in.
 	cfg.ContextKey = strings.ToLower(strings.TrimSpace(cfg.ContextKey))
-	if k := cfg.ContextKey; k == cfg.ZoomKey || k == cfg.SwitchKey || k == `ctrl+\` || k == "ctrl+q" {
+	if k := cfg.ContextKey; k == cfg.ZoomKey || k == cfg.SwitchKey || k == `ctrl+\` || k == "ctrl+q" || isJumpKey(k) {
 		cfg.ContextKey = "" // taken by something else: no key rather than a clash
+	}
+	cfg.NextKey = strings.ToLower(strings.TrimSpace(cfg.NextKey))
+	if k := cfg.NextKey; k == cfg.ZoomKey || k == cfg.SwitchKey || k == cfg.ContextKey || k == `ctrl+\` || k == "ctrl+q" || isJumpKey(k) {
+		cfg.NextKey = "" // taken by something else: no key rather than a clash
 	}
 	var contexts []Context
 	for _, c := range cfg.Contexts {
@@ -206,4 +215,15 @@ func (c Config) UnmatchedContextPaths() []string {
 // root itself or a folder above it.
 func PathTakes(path, root string) bool {
 	return root == path || strings.HasPrefix(root, strings.TrimSuffix(path, string(filepath.Separator))+string(filepath.Separator))
+}
+
+// isJumpKey reports the keys that go straight to a view of the worktree: F1 to
+// F9 and ctrl+1 to ctrl+9. They are not available for anything else.
+func isJumpKey(k string) bool {
+	for _, prefix := range []string{"f", "ctrl+"} {
+		if rest, ok := strings.CutPrefix(k, prefix); ok && len(rest) == 1 && rest[0] >= '1' && rest[0] <= '9' {
+			return true
+		}
+	}
+	return false
 }
