@@ -71,8 +71,13 @@ func (m Model) View() tea.View {
 // render draws the whole screen as a string of exactly width x height cells.
 func (m Model) render() string {
 	frame := m.renderBase()
-	if m.mode == modeSwitch && m.width >= minWidth && m.height >= minHeight {
-		return m.spliceBox(frame, m.switcherBox())
+	if m.width >= minWidth && m.height >= minHeight {
+		switch m.mode {
+		case modeSwitch:
+			return m.spliceBox(frame, m.switcherBox())
+		case modeDigest:
+			return m.spliceBox(frame, m.digestBox())
+		}
 	}
 	return frame
 }
@@ -122,6 +127,9 @@ func fit(s string, w int) string {
 func (m Model) titleBar() string {
 	working, waiting, running := m.counts()
 	left := titleStyle.Render(" D R O V E R")
+	if tabs := m.contextTabs(); tabs != "" {
+		left += "  " + tabs
+	}
 	right := dimStyle.Render(fmt.Sprintf("%d running · ", running))
 	if waiting > 0 {
 		right += waitingStyle.Render(fmt.Sprintf("◆ %d waiting", waiting)) + dimStyle.Render(" · ")
@@ -130,9 +138,9 @@ func (m Model) titleBar() string {
 		right += workingStyle.Render(fmt.Sprintf("● %d working", working)) + dimStyle.Render(" · ")
 	}
 	if m.filtering() {
-		right += dimStyle.Render(fmt.Sprintf("%d of %d worktrees ", len(m.rows), len(m.all)))
+		right += dimStyle.Render(fmt.Sprintf("%d of %d worktrees ", len(m.rows), len(m.contextRows())))
 	} else {
-		right += dimStyle.Render(fmt.Sprintf("%d worktrees ", len(m.all)))
+		right += dimStyle.Render(fmt.Sprintf("%d worktrees ", len(m.contextRows())))
 	}
 	if f := m.filterSummary(); f != "" {
 		right = focusHint.Render(f) + dimStyle.Render(" · ") + right
@@ -155,6 +163,8 @@ func (m Model) footer() string {
 		s = hintLine("SEARCH /"+m.search+"█", []hint{{"enter", "keep filter", 1}, {"esc", "clear", 1}, {"↑/↓", "move", 2}}, w)
 	case m.mode == modeNameAgent:
 		s = hintLine("NEW AGENT", []hint{{"enter", "start (empty: suggested name)", 1}, {"esc", "cancel", 1}, {"ctrl+u", "clear", 2}}, w)
+	case m.mode == modeDigest:
+		s = hintLine("CONTEXT", []hint{{"any key", "close", 1}}, w)
 	case m.mode == modeSwitch:
 		s = hintLine("SWITCH", []hint{{"←/→", "views · worktrees · projects", 1}, {m.switchKey(), "next", 1}, {"enter", "go", 1}, {"esc", "cancel", 1}}, w)
 	case m.mode == modeRename:
@@ -168,7 +178,11 @@ func (m Model) footer() string {
 	case m.mode == modeFocus:
 		s = hintLine("FOCUS", []hint{{"ctrl+\\ / ctrl+q", "back", 1}, {m.switchKey(), "switch view", 1}, {"f1-f9", "go to view", 2}, {m.zoomKey(), "zoom", 3}, {"", "every other key goes to the pane", 4}}, w)
 	default:
-		s = hintLine("", m.listHints(), w)
+		hints := m.listHints()
+		if m.contexts() != nil {
+			hints = append(hints, hint{m.contextKey(), "context", 5})
+		}
+		s = hintLine("", hints, w)
 	}
 	return fit(s, w)
 }
@@ -289,6 +303,7 @@ func (m Model) helpLines() []string {
 		{"F", "fold or unfold everything"},
 		{"ctrl+\\ / ctrl+q", "leave focus mode"},
 		{m.zoomKey(), "zoom the focused pane to the whole terminal, and back"},
+		{m.contextKey(), "next context (shift+ for the previous): only that context's worktrees are listed (list and focus mode)"},
 		{m.switchKey(), "open the switcher: ←/→ views of this worktree, every worktree, every project (list and focus mode)"},
 		{"f1-f9 / ctrl+1-9", "go straight to view 1-9, starting the terminal or editor if needed"},
 		{"PgUp PgDn", "scroll output back (list: also ctrl+u/d)"},

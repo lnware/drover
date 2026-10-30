@@ -48,6 +48,7 @@ func foldModel(t *testing.T) Model {
 		"infra/a":            {State: status.Waiting},
 		"platform/internals": {State: status.Done},
 	}
+	m = oneContext(m)
 	return m
 }
 

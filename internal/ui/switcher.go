@@ -166,7 +166,7 @@ func (m Model) switchItems() []switchItem {
 		}
 		return items
 	case scopeWorktrees:
-		rows := slices.Clone(m.all)
+		rows := slices.Clone(m.contextRows())
 		need := func(r row) int { // waiting, error and done come first, in list order within a rank
 			if !r.running {
 				return 0
@@ -189,7 +189,7 @@ func (m Model) switchItems() []switchItem {
 	case scopeProjects:
 		index := map[string]int{}
 		count, waiting := map[string]int{}, map[string]int{}
-		for _, r := range m.all {
+		for _, r := range m.contextRows() {
 			k := projectKey(r)
 			if _, ok := index[k]; !ok {
 				index[k] = len(items)
@@ -420,18 +420,24 @@ func (m Model) switcherBox() []string {
 	}
 	keys = dimStyle.Render(keys)
 
+	return popupBox(" Switch ", rows, keys, 44, m.width-2)
+}
+
+// popupBox draws rows in a bordered box with a title in the top edge and a
+// line of keys at the bottom. It is as wide as its widest line, between
+// minInner and maxInner cells inside the border. spliceBox puts it over a frame.
+func popupBox(title string, rows []string, keys string, minInner, maxInner int) []string {
 	inner := ansi.StringWidth(keys) + 1
 	for _, row := range rows {
 		inner = max(inner, ansi.StringWidth(row)+2)
 	}
-	inner = min(max(inner, 44), m.width-2)
-
-	title := ansi.Truncate(" Switch ", max(inner-2, 0), "…")
-	top := focusHint.Render("╭─") + projectStyle.Render(title) +
-		focusHint.Render(strings.Repeat("─", max(inner-1-ansi.StringWidth(title), 0))+"╮")
+	inner = min(max(inner, minInner), maxInner)
+	t := ansi.Truncate(title, max(inner-2, 0), "…")
+	top := focusHint.Render("╭─") + projectStyle.Render(t) +
+		focusHint.Render(strings.Repeat("─", max(inner-1-ansi.StringWidth(t), 0))+"╮")
 	side := focusHint.Render("│")
 	box := []string{top}
-	for _, row := range append(append(rows, ""), keys) {
+	for _, row := range append(append(slices.Clone(rows), ""), keys) {
 		box = append(box, side+fit(row, inner)+"\x1b[0m"+side)
 	}
 	return append(box, focusHint.Render("╰"+strings.Repeat("─", inner)+"╯"))

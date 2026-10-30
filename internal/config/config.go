@@ -10,6 +10,14 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// Context is a named set of worktrees shown together. Match lists org or
+// project names; "org:Acme" or "project:infra" say which when a name is both.
+// A row that no context matches falls into an implicit "Other" context.
+type Context struct {
+	Name  string   `toml:"name"`
+	Match []string `toml:"match"`
+}
+
 type Config struct {
 	// Projects are bare-layout project roots (the directory holding .bare).
 	Projects []string `toml:"projects"`
@@ -46,6 +54,13 @@ type Config struct {
 	// through kitty and tmux as they come; ctrl+tab and ctrl+space need
 	// settings that not every setup has (and ctrl+space is often tmux's own).
 	SwitchKey string `toml:"switch_key"`
+	// ContextKey cycles through the contexts (shift+ the key goes back), in the
+	// list and in focus mode alike. A function key, for the reasons SwitchKey
+	// gives.
+	ContextKey string `toml:"context_key"`
+	// Contexts group the list into the things you work on one at a time: only
+	// the active one is shown. Without any, every org is a context of its own.
+	Contexts []Context `toml:"context"`
 	// Background paints the title bar, the list and the footer in the theme's
 	// background, so a terminal background image or opacity does not show
 	// through them. The pane that shows an agent is never painted.
@@ -62,7 +77,7 @@ type Config struct {
 }
 
 func Default() Config {
-	return Config{AgentCmd: "claude", Socket: "drover", Icons: "unicode", Background: true, Mouse: true, ZoomKey: DefaultZoomKey, SwitchKey: DefaultSwitchKey}
+	return Config{AgentCmd: "claude", Socket: "drover", Icons: "unicode", Background: true, Mouse: true, ZoomKey: DefaultZoomKey, SwitchKey: DefaultSwitchKey, ContextKey: DefaultContextKey}
 }
 
 func Path() string {
@@ -103,8 +118,27 @@ func Load(path string) (Config, error) {
 	case "", `ctrl+\`, "ctrl+q", cfg.ZoomKey: // unset, or a key that is already taken
 		cfg.SwitchKey = DefaultSwitchKey
 	}
+	cfg.ContextKey = strings.ToLower(strings.TrimSpace(cfg.ContextKey))
+	taken := func(k string) bool { return k == cfg.ZoomKey || k == cfg.SwitchKey || k == `ctrl+\` || k == "ctrl+q" }
+	if cfg.ContextKey == "" || taken(cfg.ContextKey) {
+		cfg.ContextKey = DefaultContextKey
+		if taken(cfg.ContextKey) {
+			cfg.ContextKey = "f10"
+		}
+	}
+	var contexts []Context
+	for _, c := range cfg.Contexts {
+		c.Name = strings.TrimSpace(c.Name)
+		if c.Name != "" { // a context without a name cannot be shown or switched to
+			contexts = append(contexts, c)
+		}
+	}
+	cfg.Contexts = contexts
 	return cfg, nil
 }
+
+// DefaultContextKey is the context-switch key when the config sets none.
+const DefaultContextKey = "f11"
 
 // DefaultSwitchKey is the next-view key when the config sets none.
 const DefaultSwitchKey = "f12"

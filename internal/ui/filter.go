@@ -63,6 +63,9 @@ func (m Model) filtering() bool {
 // The query is matched against everything the user can see about a row,
 // including its state word, so "waiting" finds the agents waiting on you.
 func (m Model) matches(r row, query string) bool {
+	if !m.inContext(r) {
+		return false
+	}
 	if m.attention {
 		switch s, _ := m.worktreeState(r); s {
 		case status.Waiting, status.Done, status.Error:

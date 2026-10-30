@@ -168,7 +168,7 @@ func switcherScopeModel(t *testing.T) Model {
 	m.all[7].running = true // tools/feature/tools-01
 	m.agents = map[string]status.Entry{m.all[7].session: {State: status.Waiting}}
 	m.rows = m.all
-	return m
+	return oneContext(m)
 }
 
 func switcherPress(t *testing.T, m Model, keys ...tea.KeyPressMsg) Model {

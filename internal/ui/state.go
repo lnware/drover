@@ -45,7 +45,7 @@ func age(since time.Time, now time.Time) string {
 // counts tallies agents by state for the title bar: every running agent
 // counts, so two agents in one worktree are two.
 func (m Model) counts() (working, waiting, running int) {
-	for _, r := range m.all {
+	for _, r := range m.contextRows() {
 		for _, a := range r.agentList() {
 			if !a.running {
 				continue

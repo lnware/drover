@@ -45,6 +45,7 @@ theme = "jetbrains"    # or "catppuccin" (mocha), "catppuccin-macchiato", "catpp
 background = true     # paint the list, title bar and footer in the theme colour
 mouse = true           # click and wheel support; false leaves the mouse to the terminal
 zoom_key = "ctrl+z"    # focus mode: zoom the pane to the whole terminal, and back
+context_key = "f11"    # next context (shift+ for the previous)
 switch_key = "f12"     # opens the view switcher (agents, terminal, editor); F1-F9 jump
 terminal_cmd = ""      # `T`: defaults to $SHELL
 editor_cmd = ""        # `o`: defaults to `hx .`, else `$EDITOR .`, else `vi .`
@@ -68,6 +69,7 @@ Press `?` in drover for the full list. The main ones:
 | `ctrl+\` / `ctrl+q` | leave focus mode (every other key goes to the pane)                    |
 | `ctrl+z`            | in focus mode: zoom the pane to the whole terminal, and back           |
 | `F12`               | open the switcher popup; `←`/`→` change its scope (views, worktrees, projects), `F12`/`↑↓` choose, `enter` goes, `esc` cancels (list and focus mode) |
+| `F11`               | next context; `shift+F11` the previous one (list and focus mode) |
 | `F1`-`F9` / `ctrl+1`-`9` | go straight to view 1-9, starting the terminal or editor if needed |
 | `PgUp` / `PgDn`     | scroll the output back / forward (MacBook: `Fn+↑` / `Fn+↓`)            |
 | `End` / `q` / `esc` | back to live output while scrolled                                     |
@@ -187,6 +189,27 @@ default because they reach drover through kitty and tmux unchanged
 `ctrl+shift+tab` and `ctrl+1`-`9` work as well when the terminal delivers them,
 which needs `extended-keys` in tmux and, in kitty, an unmapped `ctrl+tab`.
 `switch_key` changes the key that opens the switcher.
+
+**Contexts.** Drover can show one thing at a time. With more than one org the
+list shows a single org, the others are tabs in the title bar (a `◆2` after a
+tab says two agents there wait on you), and `F11` / `shift+F11` move between
+them. The cursor returns to where you were in each, and the active context is
+remembered between runs. Notifications still arrive as before; in addition, what
+happened in a context while you were elsewhere is listed when you enter it.
+The worktree, project and attention lists in the switcher stay inside the active
+context. To group differently, name the contexts in the config; a `match` entry
+is an org or a project name (`org:Acme` and `project:infra` say which when it
+could be either), and whatever no context names ends up in an "Other" one:
+
+```toml
+[[context]]
+name = "Work"
+match = ["Acme"]
+
+[[context]]
+name = "Free time"
+match = ["Personal", "project:garden-app"]
+```
 
 ## Themes
 

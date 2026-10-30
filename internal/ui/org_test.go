@@ -116,6 +116,7 @@ func orgModel() Model {
 	}
 	m.all = m.rows
 	m.selSession = m.rows[0].session
+	m = oneContext(m)
 	return m
 }
 

@@ -43,6 +43,7 @@ const (
 	modeRename
 	modeNameAgent // typing the name of a new agent session (agent_actions.go)
 	modeSwitch    // the view switcher overlay is open (switcher.go)
+	modeDigest    // the list of what happened in a context while you were away (context.go)
 )
 
 type row struct {
@@ -118,8 +119,16 @@ type Model struct {
 	nameFor        string
 	nameContinuing bool
 	// the view switcher: the choice in the overlay, and the mode to go back to.
-	switchSel    int
-	switchBack   mode
+	switchSel  int
+	switchBack mode
+	// contexts: the active one by name, the worktree last used in each, what
+	// happened in the others, and the digest shown on entering one.
+	ctxActive    string
+	ctxLast      map[string]string
+	away         []awayEvent
+	digest       []awayEvent
+	digestName   string
+	digestBack   mode
 	switchScope  int    // scopeViews, scopeWorktrees or scopeProjects
 	switchFilter string // typed text narrowing the long scopes
 	moveSession  string // worktree whose branch and folder the M prompt renames
@@ -200,7 +209,7 @@ type (
 )
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.refresh(), scheduleTick(), readStatus(), scheduleGitTick(), loadFolds(), m.probeNow())
+	return tea.Batch(m.refresh(), scheduleTick(), readStatus(), scheduleGitTick(), loadFolds(), loadContext(), m.probeNow())
 }
 
 func scheduleTick() tea.Cmd {
@@ -275,6 +284,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.gitSeeded = true
 			return m, m.requestGit(m.all)
 		}
+	case ctxLoaded:
+		m.ctxActive, m.ctxLast = msg.active, msg.last
+		m.applyFilter()
+		return m, m.startPreview()
 	case foldsLoaded:
 		m.folds = msg.set
 		m.reselect()
@@ -357,6 +370,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleMoveKey(msg)
 		case modeSwitch:
 			return m.handleSwitchKey(msg)
+		case modeDigest:
+			return m.handleDigestKey(msg)
 		}
 		return m.handleKey(msg)
 	case tea.PasteMsg:
@@ -412,6 +427,9 @@ func (m Model) handleStatus(msg statusMsg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, c)
 				}
 			}
+		}
+		if m.statusLoaded && m.prevStates[session] != e.State {
+			m.noteAway(session, e.State)
 		}
 		if !m.statusLoaded || !m.cfg.Notify || m.prevStates[session] == e.State {
 			continue
@@ -562,6 +580,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if step, jump, ok := m.switchKeyPressed(key); ok {
 		return m.switchView(step, jump)
+	}
+	if step, ok := m.contextStep(key); ok {
+		return m.switchContext(step)
 	}
 	switch key {
 	case "q", "ctrl+c":
@@ -748,6 +769,9 @@ func (m Model) handleFocusKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if step, jump, ok := m.switchKeyPressed(msg.String()); ok {
 		return m.switchView(step, jump)
+	}
+	if step, ok := m.contextStep(msg.String()); ok {
+		return m.switchContext(step)
 	}
 	r, ok := m.selected()
 	if !ok || !m.targetRunning(r) {
