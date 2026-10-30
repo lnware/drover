@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/lnware/drover/internal/claude"
 	"github.com/lnware/drover/internal/session"
 	"github.com/lnware/drover/internal/status"
 	"github.com/lnware/drover/internal/tmux"
@@ -262,6 +263,7 @@ func updateKey(m Model, k tea.KeyPressMsg) Model {
 // private tmux server and state directory.
 func agentModel(t *testing.T) (Model, string) {
 	t.Helper()
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir()) // never the real ~/.claude
 	skipWithoutTmux(t)
 	m := mouseModel(t)
 	claudePath, argsFile := fakeClaude(t)
@@ -384,7 +386,8 @@ func TestStopKeepsTheRowAndResumeUsesTheSameConversation(t *testing.T) {
 	m.mode = modeList
 	runs(t, argsFile, 1) // let the agent really start before it is stopped
 
-	m = pressKey(t, m, "x") // stop it
+	storeConversation(t, m.rows[0].wt.Path, first.claude) // the agent got a message
+	m = pressKey(t, m, "x")                               // stop it
 	stopped, ok := m.curAgent(m.rows[0])
 	if !ok || stopped.running || m.tmux.Has(first.session) {
 		t.Fatalf("x must stop the agent but keep its row: %+v running tmux=%v", stopped, m.tmux.Has(first.session))
@@ -473,9 +476,7 @@ func TestRenameAnAgentUpdatesTheRegistry(t *testing.T) {
 func TestResumeWithNoSessionContinuesTheFoldersLastConversation(t *testing.T) {
 	m, argsFile := agentModel(t)
 	// a conversation exists for this folder: Claude keeps them under ~/.claude/projects
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	dir := filepath.Join(home, ".claude", "projects", strings.NewReplacer("/", "-", ".", "-").Replace(m.rows[0].wt.Path))
+	dir := filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "projects", claude.ProjectDirName(m.rows[0].wt.Path))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -542,5 +543,37 @@ func TestOnlyTheRowUnderTheCursorIsMarkedSelected(t *testing.T) {
 		if len(got) != 1 || !strings.Contains(got[0], want) {
 			t.Errorf("cursor step %d: selection bars on %q, want exactly the %q row", step, got, want)
 		}
+	}
+}
+
+// storeConversation fakes what Claude leaves behind once a session has had a
+// message: <config>/projects/<dir>/<id>.jsonl.
+func storeConversation(t *testing.T, dir, id string) {
+	t.Helper()
+	d := filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "projects", claude.ProjectDirName(dir))
+	if err := os.MkdirAll(d, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(d, id+".jsonl"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Closing a session before its first message leaves no conversation, and
+// `claude --resume` refuses an id it does not know: starting the same id
+// again is what keeps v/enter working.
+func TestResumeOfAnAgentThatNeverGotAMessageStartsItAgain(t *testing.T) {
+	m, argsFile := agentModel(t)
+	m = updateKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = updateKey(m, keyRunes("alpha"))
+	m = updateKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	first, _ := m.curAgent(m.rows[0])
+	m.mode = modeList
+	runs(t, argsFile, 1)
+	m = pressKey(t, m, "x")
+	m = updateKey(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	runsSeen := runs(t, argsFile, 2)
+	if slices.Contains(runsSeen[1], "--resume") || argAfter(runsSeen[1], "--session-id") != first.claude {
+		t.Errorf("with no stored conversation the agent must start again under its id %s: %q", first.claude, runsSeen[1])
 	}
 }

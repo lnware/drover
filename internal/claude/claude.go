@@ -48,3 +48,23 @@ func HasConversation(dir string) bool {
 	}
 	return false
 }
+
+// HasSession reports whether Claude Code stored the conversation with this
+// session id for dir. A session closed before its first message leaves none,
+// and `claude --resume` refuses an id it does not know.
+func HasSession(dir, id string) bool {
+	base := configDir()
+	if base == "" || id == "" {
+		return false
+	}
+	candidates := []string{dir}
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil && resolved != dir {
+		candidates = append(candidates, resolved)
+	}
+	for _, d := range candidates {
+		if _, err := os.Stat(filepath.Join(base, "projects", ProjectDirName(d), id+".jsonl")); err == nil {
+			return true
+		}
+	}
+	return false
+}

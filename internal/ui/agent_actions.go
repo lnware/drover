@@ -149,6 +149,11 @@ func (m Model) nameAgentLines() []string {
 func (m *Model) spawnAgent(r row, a agent, how launch) bool {
 	// A file left by an earlier run must not show as this session's state.
 	_ = status.Remove(status.Dir(), a.session)
+	// Claude only resumes a conversation it stored: one closed before its first
+	// message starts again under the same id instead.
+	if how == launchResume && a.claude != "" && !claude.HasSession(r.wt.Path, a.claude) {
+		how = launchNew
+	}
 	cmd, err := m.agentCommand(a, how)
 	if err != nil {
 		// The agent still starts; only the live status is lost.
