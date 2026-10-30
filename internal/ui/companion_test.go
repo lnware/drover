@@ -319,7 +319,7 @@ func TestChildRowsAndBreadcrumbReplaceTheTabStrip(t *testing.T) {
 	for _, mode := range []mode{modeList, modeFocus} {
 		m.mode = mode
 		plain := ansi.Strip(m.render())
-		for _, want := range []string{"├── $ terminal ●", "└── ✎ editor ●", "main › editor"} {
+		for _, want := range []string{"┣━━ $ terminal ●", "╰━━ ✎ editor ●", "main › editor"} {
 			if !strings.Contains(plain, want) {
 				t.Errorf("mode %d: view lacks %q", mode, want)
 			}

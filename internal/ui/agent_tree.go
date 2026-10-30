@@ -37,13 +37,13 @@ func (s iconSet) icon(v paneView) string {
 	return s.agent
 }
 
-// connector is the guide from a worktree to its child: two dashes wide, as in
+// connector is the guide from a worktree to its child: thick, two cells wide, as in
 // agent-manager's tree, so the children read as hanging off the worktree.
 func connector(last bool) string {
 	if last {
-		return "└──"
+		return "╰━━"
 	}
-	return "├──"
+	return "┣━━"
 }
 
 // childStyles returns the plain style for a child row and a function that
@@ -82,7 +82,7 @@ func (m Model) agentAge(a agent, now time.Time) string {
 
 // renderAgent draws an agent child row of w cells:
 //
-//	├── ◈ feature-a                    working 2m
+//	┣━━ ◈ feature-a                    working 2m
 //
 // The icon takes the state's colour, the name is bright while the agent runs
 // and dim once it has stopped, and the FOCUS badge replaces the state on the

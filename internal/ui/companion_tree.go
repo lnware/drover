@@ -9,8 +9,8 @@ import (
 // A running terminal or editor is a child row under its worktree:
 //
 //	  ● main
-//	     ├ terminal ●
-//	     └ editor ●
+//	     ┣ terminal ●
+//	     ╰ editor ●
 //
 // The worktree row is the agent. Which pane the right side shows is not a
 // remembered choice but follows the cursor: m.sub is the child the cursor is

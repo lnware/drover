@@ -170,7 +170,7 @@ func TestAgentRowsRenderWithIconsConnectorsAndState(t *testing.T) {
 	m.agents = map[string]status.Entry{"infra/main~aaaaaa": {State: status.Working, Since: time.Now().Add(-2 * time.Minute)}}
 	m.companions[tmux.CompanionName("term", m.rows[0].session)] = true
 	plain := ansi.Strip(m.render())
-	for _, want := range []string{"├── ◈ fix login", "├── ◈ old work", "└── $ terminal ●", "working 2m", "stopped 3h"} {
+	for _, want := range []string{"┣━━ ◈ fix login", "┣━━ ◈ old work", "╰━━ $ terminal ●", "working 2m", "stopped 3h"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("the list lacks %q:\n%s", want, plain)
 		}
