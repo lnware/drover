@@ -185,17 +185,15 @@ func TestContextsAndContextKeyFromTheConfig(t *testing.T) {
 	if len(c.Contexts) != 2 || c.Contexts[0].Name != "Work" || c.Contexts[1].Name != "Free time" || c.Contexts[0].Match[1] != "project:tools" {
 		t.Errorf("contexts keep their order and a nameless one is dropped: %+v", c.Contexts)
 	}
-	if got := Default().ContextKey; got != DefaultContextKey {
-		t.Errorf("default = %q", got)
+	if got := Default().ContextKey; got != "" {
+		t.Errorf("no context key by default: %q", got)
 	}
 	for body, want := range map[string]string{
-		`socket = "x"`:                                 DefaultContextKey,
-		`context_key = "F8"`:                           "f8",
-		`context_key = "ctrl+q"`:                       DefaultContextKey, // leaves focus
-		`switch_key = "f11"`:                           "f10",             // the default is taken, so the next free one
-		`context_key = "f12"`:                          DefaultContextKey, // the switch key
-		`zoom_key = "f11"`:                             "f10",
-		`context_key = "f9"` + "\nswitch_key = \"f9\"": DefaultContextKey,
+		`socket = "x"`:                               "",
+		`context_key = "F8"`:                         "f8",
+		`context_key = "ctrl+q"`:                     "", // leaves focus
+		`context_key = "f12"`:                        "", // the switch key
+		`zoom_key = "f9"` + "\ncontext_key = \"f9\"": "",
 	} {
 		if got := load(body).ContextKey; got != want {
 			t.Errorf("%s: context key %q, want %q", body, got, want)

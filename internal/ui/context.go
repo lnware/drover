@@ -112,10 +112,14 @@ func (m Model) contextRows() []row {
 	if defs == nil {
 		return m.all
 	}
-	act := m.activeContext(defs)
+	return m.contextRowsOf(defs, m.activeContext(defs))
+}
+
+// contextRowsOf are the worktrees of the context at index idx of defs.
+func (m Model) contextRowsOf(defs []ctxDef, idx int) []row {
 	var out []row
 	for _, r := range m.all {
-		if contextOf(defs, r) == act {
+		if contextOf(defs, r) == idx {
 			out = append(out, r)
 		}
 	}
@@ -133,6 +137,9 @@ func (m Model) contextKey() string {
 
 // contextStep says whether a key switches context, and which way.
 func (m Model) contextStep(key string) (int, bool) {
+	if m.contextKey() == "" {
+		return 0, false // no key is set: ":ctx" is the way
+	}
 	switch key {
 	case m.contextKey():
 		return 1, true
@@ -230,12 +237,21 @@ func (m Model) switchContext(step int) (tea.Model, tea.Cmd) {
 		m.notice = "only one context: add [[context]] entries to the config, or work in more than one org"
 		return m, nil
 	}
+	return m.switchContextTo(defs, (m.activeContext(defs)+step+len(defs))%len(defs))
+}
+
+// switchContextTo moves to the context at index next of defs.
+func (m Model) switchContextTo(defs []ctxDef, next int) (tea.Model, tea.Cmd) {
 	cur := m.activeContext(defs)
+	if next == cur {
+		m.notice = "already in " + defs[cur].name
+		return m, nil
+	}
 	if m.hdr == "" && m.selSession != "" {
 		m.ctxLast = cloneMap(m.ctxLast)
 		m.ctxLast[defs[cur].name] = m.selSession
 	}
-	next := (cur + step + len(defs)) % len(defs)
+	m.ctxPrev = defs[cur].name
 	m.ctxActive = defs[next].name
 	m.search, m.attention = "", false
 	m.applyFilter()

@@ -77,6 +77,9 @@ func (m Model) render() string {
 			return m.spliceBox(frame, m.switcherBox())
 		case modeDigest:
 			return m.spliceBox(frame, m.digestBox())
+		case modeCommand:
+			box := m.commandBox()
+			return m.spliceBoxAt(frame, box, 0, max(m.height-1-len(box), 1))
 		}
 	}
 	return frame
@@ -163,6 +166,8 @@ func (m Model) footer() string {
 		s = hintLine("SEARCH /"+m.search+"█", []hint{{"enter", "keep filter", 1}, {"esc", "clear", 1}, {"↑/↓", "move", 2}}, w)
 	case m.mode == modeNameAgent:
 		s = hintLine("NEW AGENT", []hint{{"enter", "start (empty: suggested name)", 1}, {"esc", "cancel", 1}, {"ctrl+u", "clear", 2}}, w)
+	case m.mode == modeCommand:
+		s = m.commandLine()
 	case m.mode == modeDigest:
 		s = hintLine("CONTEXT", []hint{{"any key", "close", 1}}, w)
 	case m.mode == modeSwitch:
@@ -178,10 +183,7 @@ func (m Model) footer() string {
 	case m.mode == modeFocus:
 		s = hintLine("FOCUS", []hint{{"ctrl+\\ / ctrl+q", "back", 1}, {m.switchKey(), "switch view", 1}, {"f1-f9", "go to view", 2}, {m.zoomKey(), "zoom", 3}, {"", "every other key goes to the pane", 4}}, w)
 	default:
-		hints := m.listHints()
-		if m.contexts() != nil {
-			hints = append(hints, hint{m.contextKey(), "context", 5})
-		}
+		hints := append(m.listHints(), hint{":", "command", 4})
 		s = hintLine("", hints, w)
 	}
 	return fit(s, w)
@@ -303,7 +305,7 @@ func (m Model) helpLines() []string {
 		{"F", "fold or unfold everything"},
 		{"ctrl+\\ / ctrl+q", "leave focus mode"},
 		{m.zoomKey(), "zoom the focused pane to the whole terminal, and back"},
-		{m.contextKey(), "next context (shift+ for the previous): only that context's worktrees are listed (list and focus mode)"},
+		{":", "command line: ctx (switch context), wt (jump to a worktree), term, edit, new, config, reload, help, q"},
 		{m.switchKey(), "open the switcher: ←/→ views of this worktree, every worktree, every project (list and focus mode)"},
 		{"f1-f9 / ctrl+1-9", "go straight to view 1-9, starting the terminal or editor if needed"},
 		{"PgUp PgDn", "scroll output back (list: also ctrl+u/d)"},

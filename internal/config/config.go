@@ -54,9 +54,10 @@ type Config struct {
 	// through kitty and tmux as they come; ctrl+tab and ctrl+space need
 	// settings that not every setup has (and ctrl+space is often tmux's own).
 	SwitchKey string `toml:"switch_key"`
-	// ContextKey cycles through the contexts (shift+ the key goes back), in the
-	// list and in focus mode alike. A function key, for the reasons SwitchKey
-	// gives.
+	// ContextKey is an optional key that cycles through the contexts (shift+
+	// the key goes back), in the list and in focus mode alike. Empty by
+	// default: ":ctx" in the list switches context. A function key is the
+	// safe choice, for the reasons SwitchKey gives.
 	ContextKey string `toml:"context_key"`
 	// Contexts group the list into the things you work on one at a time: only
 	// the active one is shown. Without any, every org is a context of its own.
@@ -118,13 +119,10 @@ func Load(path string) (Config, error) {
 	case "", `ctrl+\`, "ctrl+q", cfg.ZoomKey: // unset, or a key that is already taken
 		cfg.SwitchKey = DefaultSwitchKey
 	}
+	// No context key by default: ":ctx" is the way, and a key is opt-in.
 	cfg.ContextKey = strings.ToLower(strings.TrimSpace(cfg.ContextKey))
-	taken := func(k string) bool { return k == cfg.ZoomKey || k == cfg.SwitchKey || k == `ctrl+\` || k == "ctrl+q" }
-	if cfg.ContextKey == "" || taken(cfg.ContextKey) {
-		cfg.ContextKey = DefaultContextKey
-		if taken(cfg.ContextKey) {
-			cfg.ContextKey = "f10"
-		}
+	if k := cfg.ContextKey; k == cfg.ZoomKey || k == cfg.SwitchKey || k == `ctrl+\` || k == "ctrl+q" {
+		cfg.ContextKey = "" // taken by something else: no key rather than a clash
 	}
 	var contexts []Context
 	for _, c := range cfg.Contexts {
@@ -137,8 +135,8 @@ func Load(path string) (Config, error) {
 	return cfg, nil
 }
 
-// DefaultContextKey is the context-switch key when the config sets none.
-const DefaultContextKey = "f11"
+// DefaultContextKey is the context-switch key when the config sets none: none.
+const DefaultContextKey = ""
 
 // DefaultSwitchKey is the next-view key when the config sets none.
 const DefaultSwitchKey = "f12"

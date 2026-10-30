@@ -45,7 +45,7 @@ theme = "jetbrains"    # or "catppuccin" (mocha), "catppuccin-macchiato", "catpp
 background = true     # paint the list, title bar and footer in the theme colour
 mouse = true           # click and wheel support; false leaves the mouse to the terminal
 zoom_key = "ctrl+z"    # focus mode: zoom the pane to the whole terminal, and back
-context_key = "f11"    # next context (shift+ for the previous)
+context_key = ""       # optional key for the next context (shift+ for the previous), e.g. "f11"
 switch_key = "f12"     # opens the view switcher (agents, terminal, editor); F1-F9 jump
 terminal_cmd = ""      # `T`: defaults to $SHELL
 editor_cmd = ""        # `o`: defaults to `hx .`, else `$EDITOR .`, else `vi .`
@@ -69,7 +69,7 @@ Press `?` in drover for the full list. The main ones:
 | `ctrl+\` / `ctrl+q` | leave focus mode (every other key goes to the pane)                    |
 | `ctrl+z`            | in focus mode: zoom the pane to the whole terminal, and back           |
 | `F12`               | open the switcher popup; `←`/`→` change its scope (views, worktrees, projects), `F12`/`↑↓` choose, `enter` goes, `esc` cancels (list and focus mode) |
-| `F11`               | next context; `shift+F11` the previous one (list and focus mode) |
+| `:`                 | the command line (list only): `ctx`, `wt`, `term`, `edit`, `new`, `config`, `reload`, `help`, `q` |
 | `F1`-`F9` / `ctrl+1`-`9` | go straight to view 1-9, starting the terminal or editor if needed |
 | `PgUp` / `PgDn`     | scroll the output back / forward (MacBook: `Fn+↑` / `Fn+↓`)            |
 | `End` / `q` / `esc` | back to live output while scrolled                                     |
@@ -192,8 +192,8 @@ which needs `extended-keys` in tmux and, in kitty, an unmapped `ctrl+tab`.
 
 **Contexts.** Drover can show one thing at a time. With more than one org the
 list shows a single org, the others are tabs in the title bar (a `◆2` after a
-tab says two agents there wait on you), and `F11` / `shift+F11` move between
-them. The cursor returns to where you were in each, and the active context is
+tab says two agents there wait on you), and `:ctx` switches between them (see
+below). The cursor returns to where you were in each, and the active context is
 remembered between runs. Notifications still arrive as before; in addition, what
 happened in a context while you were elsewhere is listed when you enter it.
 The worktree, project and attention lists in the switcher stay inside the active
@@ -210,6 +210,21 @@ match = ["Acme"]
 name = "Free time"
 match = ["Personal", "project:garden-app"]
 ```
+
+**The command line.** `:` in the list opens a prompt in the footer with the
+matching commands above it: `tab` completes, `↑`/`↓` choose, `enter` runs the
+chosen one, `esc` cancels, and `↑` on an empty line recalls the last command.
+
+| command         | does                                                             |
+| --------------- | ---------------------------------------------------------------- |
+| `ctx [name\|-]` | switch context: the next one, a name (a prefix is enough), or back |
+| `wt <name>`     | jump to a worktree of this context by project or branch          |
+| `agent` `term` `edit` | show the agent, open the terminal or the editor            |
+| `new` `config` `reload` `help` `q` | the keys `n`, `c`, `R`, `?` and `q`            |
+
+In focus mode `:` goes to the pane, so Helix keeps it. `context_key` sets an
+optional key for the next context (`shift+` it for the previous one) if you want
+one; there is none by default.
 
 ## Themes
 

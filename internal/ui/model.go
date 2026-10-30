@@ -44,6 +44,7 @@ const (
 	modeNameAgent // typing the name of a new agent session (agent_actions.go)
 	modeSwitch    // the view switcher overlay is open (switcher.go)
 	modeDigest    // the list of what happened in a context while you were away (context.go)
+	modeCommand   // the ":" command line is open (command.go)
 )
 
 type row struct {
@@ -123,8 +124,15 @@ type Model struct {
 	switchBack mode
 	// contexts: the active one by name, the worktree last used in each, what
 	// happened in the others, and the digest shown on entering one.
-	ctxActive    string
-	ctxLast      map[string]string
+	ctxActive string
+	ctxLast   map[string]string
+	ctxPrev   string // the context before this one, for ":ctx -"
+	// the command line: what is typed, the chosen suggestion, and the history
+	// of what was run (cmdPos counts back into it while it is browsed).
+	cmdInput     string
+	cmdSel       int
+	cmdHist      []string
+	cmdPos       int
 	away         []awayEvent
 	digest       []awayEvent
 	digestName   string
@@ -372,6 +380,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSwitchKey(msg)
 		case modeDigest:
 			return m.handleDigestKey(msg)
+		case modeCommand:
+			return m.handleCommandKey(msg)
 		}
 		return m.handleKey(msg)
 	case tea.PasteMsg:
@@ -408,6 +418,8 @@ func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 		return m.handleNameAgentKey(pasteAsKey(msg.Content))
 	case modeMoveBranch:
 		return m.handleMoveKey(pasteAsKey(msg.Content))
+	case modeCommand:
+		return m.handleCommandKey(pasteAsKey(msg.Content))
 	}
 	return m, nil
 }
@@ -589,6 +601,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "?":
 		m.help = true
+	case ":":
+		return m.openCommand()
 	case "up", "k":
 		m.move(-1)
 		return m, tea.Batch(m.startPreview(), m.readSelectedGit())

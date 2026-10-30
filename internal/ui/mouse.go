@@ -80,7 +80,7 @@ func (m Model) paneRowAt(line int) int {
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// Prompts and help own the screen; a stray click must not act under them.
 	// The lazygit popup takes every event, which means it ignores the mouse.
-	if m.help || m.mode == modeNew || m.mode == modeSearch || m.mode == modeRename || m.mode == modeNameAgent || m.mode == modeSwitch || m.mode == modeDigest || m.mode == modePopup {
+	if m.help || m.mode == modeNew || m.mode == modeSearch || m.mode == modeRename || m.mode == modeNameAgent || m.mode == modeSwitch || m.mode == modeDigest || m.mode == modeCommand || m.mode == modePopup {
 		return m, nil
 	}
 	mouse := msg.Mouse()

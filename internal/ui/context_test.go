@@ -34,6 +34,7 @@ func contextModel(t *testing.T) Model {
 	t.Helper()
 	t.Setenv("DROVER_STATE_DIR", t.TempDir())
 	m := testModel()
+	m.cfg.ContextKey = "f11" // the optional key; ":ctx" needs none (command_test.go)
 	mk := func(org, project, branch string) row {
 		return row{
 			org: org, project: project, root: "/" + project,

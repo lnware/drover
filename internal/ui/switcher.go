@@ -437,7 +437,11 @@ func popupBox(title string, rows []string, keys string, minInner, maxInner int) 
 		focusHint.Render(strings.Repeat("─", max(inner-1-ansi.StringWidth(t), 0))+"╮")
 	side := focusHint.Render("│")
 	box := []string{top}
-	for _, row := range append(append(slices.Clone(rows), ""), keys) {
+	lines := slices.Clone(rows)
+	if keys != "" {
+		lines = append(lines, "", keys)
+	}
+	for _, row := range lines {
 		box = append(box, side+fit(row, inner)+"\x1b[0m"+side)
 	}
 	return append(box, focusHint.Render("╰"+strings.Repeat("─", inner)+"╯"))
@@ -453,8 +457,17 @@ func (m Model) spliceBox(frame string, box []string) string {
 	for _, l := range box {
 		w = max(w, ansi.StringWidth(l))
 	}
+	return m.spliceBoxAt(frame, box, max((m.width-w)/2, 0), max((m.height-len(box))/2, 0))
+}
+
+// spliceBoxAt draws box with its top left corner at cell (x, y) of a finished
+// frame, keeping every line m.width cells wide.
+func (m Model) spliceBoxAt(frame string, box []string, x, y int) string {
+	w := 0
+	for _, l := range box {
+		w = max(w, ansi.StringWidth(l))
+	}
 	lines := strings.Split(frame, "\n")
-	x, y := max((m.width-w)/2, 0), max((m.height-len(box))/2, 0)
 	for i, bl := range box {
 		if y+i >= len(lines) {
 			break
