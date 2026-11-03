@@ -38,8 +38,9 @@ func (m Model) layout(w int) listLayout {
 	var l listLayout
 	if len(m.cfg.Projects) == 0 {
 		l.add(" No projects.", -1)
-		l.add(dimStyle.Render(" Pass project roots as"), -1)
-		l.add(dimStyle.Render(" arguments or set `projects`"), -1)
+		l.add(dimStyle.Render(" P clones a Git URL as"), -1)
+		l.add(dimStyle.Render(" a project. Or pass roots as"), -1)
+		l.add(dimStyle.Render(" arguments, or set `projects`"), -1)
 		l.add(dimStyle.Render(" in "+config.Path()), -1)
 	}
 	l.items = visibleItems(m.items())

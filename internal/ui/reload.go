@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/lnware/drover/internal/config"
+	"github.com/lnware/drover/internal/projects"
 )
 
 // WithConfigFile tells the model where its config came from, so c can edit it
@@ -86,6 +87,8 @@ func (m Model) reloadConfig() (tea.Model, tea.Cmd) {
 	old := m.cfg
 	if m.projectsFixed {
 		next.Projects = old.Projects
+	} else {
+		next.Projects = projects.Merge(next.Projects, projects.Load())
 	}
 	var restart []string
 	if next.Socket != old.Socket {

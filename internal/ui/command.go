@@ -44,6 +44,7 @@ func (m Model) commands() []command {
 		{name: "agent", help: "show the agent of this worktree", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.openView(viewAgent) }},
 		{name: "term", help: "open the terminal", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.openView(viewTerminal) }},
 		{name: "edit", help: "open the editor", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.openView(viewEditor) }},
+		{name: "add", help: "add a project: clone a Git URL", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.openAdd() }},
 		{name: "new", help: "new worktree", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.openNew() }},
 		{name: "config", help: "edit the config file", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.openConfig() }},
 		{name: "reload", help: "reload the config", run: func(m Model, _ string) (tea.Model, tea.Cmd) { return m.reloadConfig() }},

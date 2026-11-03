@@ -47,6 +47,7 @@ const (
 	modeDigest    // the list of what happened in a context while you were away (context.go)
 	modeCommand   // the ":" command line is open (command.go)
 	modePR        // the popup of what a pull request from the branch would hold (pr_view.go)
+	modeAdd       // the add-project popup: a Git URL and a folder (add_project.go)
 )
 
 type row struct {
@@ -146,6 +147,7 @@ type Model struct {
 
 	input   string
 	newRoot string
+	add     addState
 	newBase string
 	busy    bool
 
@@ -361,6 +363,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.preview = preview{session: msg.session, cap: msg.cap, ok: true, at: msg.at}
 		}
 		return m, nil
+	case addStepDone:
+		return m.handleAddStep(msg)
 	case worktreeCreated:
 		return m.handleCreated(msg)
 	case branchMoved:
@@ -397,6 +401,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleCommandKey(msg)
 		case modePR:
 			return m.handlePRKey(msg)
+		case modeAdd:
+			return m.handleAddKey(msg)
 		}
 		return m.handleKey(msg)
 	case tea.PasteMsg:
@@ -435,6 +441,8 @@ func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 		return m.handleMoveKey(pasteAsKey(msg.Content))
 	case modeCommand:
 		return m.handleCommandKey(pasteAsKey(msg.Content))
+	case modeAdd:
+		return m.handleAddKey(pasteAsKey(msg.Content))
 	}
 	return m, nil
 }
@@ -660,6 +668,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.reloadConfig()
 	case "n":
 		return m.openNew()
+	case "P":
+		return m.openAdd()
 	case "N":
 		return m.newAgent()
 	case "/":

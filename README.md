@@ -53,6 +53,25 @@ editor_cmd = ""        # `o`: defaults to `hx .`, else `$EDITOR .`, else `vi .`
 lazygit_cmd = ""       # `G`: defaults to `lazygit`
 ```
 
+### Adding a project
+
+`P` (or `:add`) asks for a Git URL and a folder, and makes the bare layout
+above: `git clone --bare` into `.bare`, a `.git` file pointing at it, the fetch
+refspec a plain bare clone lacks (without it `origin/main` never updates, and
+new branches would start from a stale base), the default branch as the first
+worktree, with its upstream set. The folder follows the URL: beside your other
+projects of the same owner (`git@github.com:acme/payments.git` goes next to
+`~/dev/acme/infra`), else under the folder that holds your orgs. Esc during a
+clone stops it and removes what it made; a failed clone leaves nothing behind.
+
+Git runs without a terminal, so a key that needs a passphrase prompt fails
+with git's own message instead of asking: use an agent (`ssh-add`) or a
+credential helper.
+
+The new project is recorded in `~/.local/state/drover/projects.json`, not in
+`config.toml`, which drover never writes; it is merged with `projects` from the
+config (and ignored when roots are given as arguments).
+
 `c` opens the config in `$VISUAL` / `$EDITOR` and reloads it when the editor
 exits; `R` reloads without opening it. A reload applies everything except
 `socket` and `mouse`, which are fixed at start-up (the footer says so).
@@ -77,6 +96,7 @@ Press `?` in drover for the full list. The main ones:
 | `PgUp` / `PgDn`     | scroll the output back / forward (MacBook: `Fn+↑` / `Fn+↓`)            |
 | `End` / `q` / `esc` | back to live output while scrolled                                     |
 | `n`                 | new worktree: type `feature/my-change`, enter creates it               |
+| `P`                 | add a project: clone a Git URL into the bare layout (also `:add`)       |
 | `N`                 | new agent session in this worktree: asks for a name (empty: named after the branch) |
 | `v`                 | resume the stopped agent under the cursor with its own conversation    |
 | `d`                 | remove the worktree (press twice; the branch is kept)                  |
@@ -242,7 +262,7 @@ chosen one, `esc` cancels, and `↑` on an empty line recalls the last command.
 | `pr`            | what a pull request from this branch would hold                  |
 | `next`          | go to the next agent that needs you                              |
 | `agent` `term` `edit` | show the agent, open the terminal or the editor            |
-| `new` `config` `reload` `help` `q` | the keys `n`, `c`, `R`, `?` and `q`            |
+| `new` `add` `config` `reload` `help` `q` | the keys `n`, `P`, `c`, `R`, `?` and `q` |
 
 In focus mode `:` goes to the pane, so Helix keeps it. `context_key` sets an
 optional key for the next context (`shift+` it for the previous one) if you want

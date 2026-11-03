@@ -14,6 +14,7 @@ import (
 
 	"github.com/lnware/drover/internal/config"
 	"github.com/lnware/drover/internal/hooks"
+	"github.com/lnware/drover/internal/projects"
 	"github.com/lnware/drover/internal/status"
 	"github.com/lnware/drover/internal/tmux"
 	"github.com/lnware/drover/internal/ui"
@@ -65,6 +66,9 @@ func run(args []string) error {
 			}
 			cfg.Projects = append(cfg.Projects, abs)
 		}
+	}
+	if len(args) == 0 {
+		cfg.Projects = projects.Merge(cfg.Projects, projects.Load())
 	}
 	if _, ok := ui.ResolveTheme(cfg.Theme); !ok {
 		fmt.Fprintf(os.Stderr, "drover: unknown theme %q, using %s (themes: %s)\n",

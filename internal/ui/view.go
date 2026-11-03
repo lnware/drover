@@ -79,6 +79,8 @@ func (m Model) render() string {
 			return m.spliceBox(frame, m.digestBox())
 		case modePR:
 			return m.spliceBox(frame, m.prBox())
+		case modeAdd:
+			return m.spliceBox(frame, m.addBox())
 		case modeCommand:
 			box := m.commandBox()
 			return m.spliceBoxAt(frame, box, 0, max(m.height-1-len(box), 1))
@@ -175,6 +177,8 @@ func (m Model) footer() string {
 		s = hintLine("PULL REQUEST", []hint{{"any key", "close", 1}}, w)
 	case m.mode == modeCommand:
 		s = m.commandLine()
+	case m.mode == modeAdd:
+		s = hintLine("ADD PROJECT", []hint{{"enter", "clone", 1}, {"tab", "next field", 2}, {"esc", "cancel", 1}}, w)
 	case m.mode == modeDigest:
 		s = hintLine("CONTEXT", []hint{{"any key", "close", 1}}, w)
 	case m.mode == modeSwitch:
@@ -350,6 +354,7 @@ func (m Model) helpLines() []string {
 		{"End q esc", "back to live output"},
 		{"mouse", "click selects/focuses, wheel scrolls"},
 		{"n", "new worktree in this project"},
+		{"P", "add a project: clone a Git URL into the bare layout (also :add)"},
 		{"N", "new agent session in this worktree: asks for a name (empty: named after the branch)"},
 		{"/", "search; filters as you type (enter keeps, esc clears)"},
 		{"w", "show only agents waiting, done or in error"},
