@@ -190,8 +190,12 @@ func TestClickSelectsRowAndHeadersToggleFolds(t *testing.T) {
 	if next.cursor != 2 || next.selSession != m.rows[2].session {
 		t.Errorf("click on row 2 selected %d (%q)", next.cursor, next.selSession)
 	}
-	if next.mode != modeList {
-		t.Error("clicking a row must select, not focus")
+	// It also focuses, like enter: this worktree has no agent, so it asks for a name.
+	if next.mode != modeNameAgent || next.nameFor != m.rows[2].session {
+		t.Errorf("clicking a row must focus it like enter: mode %d, name for %q", next.mode, next.nameFor)
+	}
+	if !next.gitBusy {
+		t.Error("the git read started by the click was not recorded on the model")
 	}
 	// Clicking a row while a header is selected must leave the header.
 	onHeader := m
@@ -242,7 +246,7 @@ func TestWheelOverListMovesLikeTheArrowKeys(t *testing.T) {
 	}
 }
 
-func TestMouseIgnoredInPromptsHelpAndFocus(t *testing.T) {
+func TestMouseIgnoredInPromptsAndHelp(t *testing.T) {
 	leftW := 0
 	for _, setup := range []struct {
 		name string
@@ -252,7 +256,9 @@ func TestMouseIgnoredInPromptsHelpAndFocus(t *testing.T) {
 		{"search", func(m *Model) { m.mode = modeSearch }},
 		{"rename", func(m *Model) { m.mode = modeRename }},
 		{"help", func(m *Model) { m.help = true }},
-		{"focus", func(m *Model) { m.mode = modeFocus }},
+		{"move branch", func(m *Model) { m.mode = modeMoveBranch }},
+		{"popup", func(m *Model) { m.mode = modePopup }},
+		{"command", func(m *Model) { m.mode = modeCommand }},
 	} {
 		m := mouseModel(t)
 		manyRows(&m, 3)
@@ -291,12 +297,28 @@ func TestClickInPaneFocusesAndFocusSwallowsMouse(t *testing.T) {
 	if a, ok := m.curAgent(m.rows[0]); !ok || !m.tmux.Has(a.session) {
 		t.Error("focusing by click did not start the agent")
 	}
-	// In focus mode a click on another row must not select it, and nothing
-	// is forwarded: the pane only ever receives keys.
-	if got := step(m, click(3, 4, tea.MouseLeft)); got.cursor != 0 || got.mode != modeFocus {
-		t.Errorf("click in focus mode changed state: cursor %d mode %d", got.cursor, got.mode)
+	// In focus mode nothing is forwarded: the pane only ever receives keys,
+	// and clicks on the pane, the focused row or a header change nothing.
+	rowY := func(i int) int {
+		for y := 1; y < m.height-1; y++ {
+			if m.listRowAt(y-1) == i {
+				return y
+			}
+		}
+		t.Fatalf("row %d is not on screen", i)
+		return -1
 	}
-	if got := step(m, click(3, 4, tea.MouseWheelDown)); got.cursor != 0 {
+	for name, p := range map[string][2]int{"pane": {leftW + 5, 10}, "focused row": {3, rowY(0)}, "header": {3, rowY(0) - 1}} {
+		if got := step(m, click(p[0], p[1], tea.MouseLeft)); got.cursor != 0 || got.mode != modeFocus {
+			t.Errorf("click on the %s in focus mode changed state: cursor %d mode %d", name, got.cursor, got.mode)
+		}
+	}
+	if got := step(m, click(3, rowY(1), tea.MouseWheelDown)); got.cursor != 0 {
 		t.Error("wheel over the list in focus mode moved the selection")
+	}
+	// A click on another row moves the focus there; it has no agent yet, so
+	// it asks for a name, like enter on it.
+	if got := step(m, click(3, rowY(1), tea.MouseLeft)); got.cursor != 1 || got.mode != modeNameAgent {
+		t.Errorf("click on another row in focus mode: cursor %d mode %d, want row 1 and the name prompt", got.cursor, got.mode)
 	}
 }

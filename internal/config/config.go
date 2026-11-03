@@ -76,6 +76,10 @@ type Config struct {
 	// Mouse turns on click and wheel support. Capturing the mouse stops the
 	// terminal's own text selection (kitty: hold shift to select anyway).
 	Mouse bool `toml:"mouse"`
+	// ListWidth fixes the list at this many columns instead of the automatic
+	// width; 0 (the default) keeps it automatic. Dragging the divider with
+	// the mouse overrides it until the divider is double-clicked.
+	ListWidth int `toml:"list_width"`
 	// TerminalCmd, EditorCmd and LazygitCmd run in the companion panes.
 	// Empty means the default, resolved by the ui package (so tests and
 	// the PATH lookup stay out of config loading).

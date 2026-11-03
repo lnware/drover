@@ -44,6 +44,7 @@ icons = "unicode"      # or "nerd" for the Nerd Font branch glyph in the git bar
 theme = "jetbrains"    # or "catppuccin" (mocha), "catppuccin-macchiato", "catppuccin-frappe"
 background = true     # paint the list, title bar and footer in the theme colour
 mouse = true           # click and wheel support; false leaves the mouse to the terminal
+list_width = 0         # list columns; 0 is automatic. Dragging the divider overrides it
 zoom_key = "ctrl+z"    # focus mode: zoom the pane to the whole terminal, and back
 next_key = ""          # optional key for the next agent that needs you (shift+ for the previous)
 context_key = ""       # optional key for the next context (shift+ for the previous), e.g. "f11"
@@ -162,10 +163,13 @@ with the wheel or `PgUp`. Programs that draw on the alternate screen (Claude
 Code in fullscreen mode, Helix, lazygit, vim) keep no tmux history, so drover
 passes the wheel and page keys to them instead.
 
-**Mouse.** Clicks select rows, fold headers and focus the pane; the wheel
-moves the list or scrolls the pane. Capturing the mouse stops the terminal's
-own text selection (kitty: hold `shift` to select); `mouse = false` turns it
-off.
+**Mouse.** A click on a row or the pane focuses it, like `enter` (in focus
+mode, a click on another row moves the focus there); a click on a header
+folds it. The wheel moves the list or scrolls the pane. Drag the divider
+between the list and the pane to resize the list; the width is kept across
+restarts, and a double-click on the divider goes back to `list_width`.
+Capturing the mouse stops the terminal's own text selection (kitty: hold
+`shift` to select); `mouse = false` turns it off.
 
 **When nobody is looking.** Inside tmux, drover pauses all polling while its
 popup or window is hidden, and resumes at once when it is shown again. With

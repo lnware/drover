@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"time"
+
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -78,23 +80,38 @@ func (m Model) paneRowAt(line int) int {
 }
 
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	// Prompts and help own the screen; a stray click must not act under them.
-	// The lazygit popup takes every event, which means it ignores the mouse.
-	if m.help || m.mode == modeNew || m.mode == modeSearch || m.mode == modeRename || m.mode == modeNameAgent || m.mode == modeSwitch || m.mode == modeDigest || m.mode == modeCommand || m.mode == modePR || m.mode == modePopup {
+	mouse := msg.Mouse()
+	// A drag ends on any release, even one under a prompt that a key opened
+	// mid-drag, so the divider never stays stuck to the pointer.
+	if _, ok := msg.(tea.MouseReleaseMsg); ok && m.drag.active {
+		return m.releaseDivider()
+	}
+	// Prompts, popups and help own the screen; a stray click must not act
+	// under them. Only the list and focus mode take the mouse, so a new mode
+	// is safe until it opts in. The lazygit popup ignores the mouse too.
+	if m.help || (m.mode != modeList && m.mode != modeFocus) {
 		return m, nil
 	}
-	mouse := msg.Mouse()
 	switch msg.(type) {
 	case tea.MouseWheelMsg:
 		if mouse.Button == tea.MouseWheelUp || mouse.Button == tea.MouseWheelDown {
 			return m.handleWheel(m.hit(mouse.X, mouse.Y), mouse.Button == tea.MouseWheelUp)
 		}
 	case tea.MouseClickMsg:
-		if mouse.Button == tea.MouseLeft {
-			return m.handleClick(m.hit(mouse.X, mouse.Y))
+		if mouse.Button != tea.MouseLeft {
+			return m, nil
+		}
+		if m.onDivider(mouse.X, mouse.Y) {
+			return m.pressDivider(time.Now())
+		}
+		m.drag.active = false // a release we never saw: this press is not a drag
+		return m.handleClick(m.hit(mouse.X, mouse.Y))
+	case tea.MouseMotionMsg:
+		if m.drag.active && mouse.Button == tea.MouseLeft {
+			return m.dragDivider(mouse.X)
 		}
 	}
-	return m, nil // releases and drags carry nothing we use
+	return m, nil // other releases and motion carry nothing we use
 }
 
 // handleWheel scrolls the scrollback over the right pane. Over the list it
@@ -131,31 +148,55 @@ func (m Model) handleWheel(h hit, up bool) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleClick focuses what is clicked, like enter on it: a row in the list
+// (an agent, a terminal or editor row, or a worktree, which asks for a name
+// or resumes), or the pane. In focus mode a click on another row moves the
+// focus there; clicks are never forwarded to the pane itself.
 func (m Model) handleClick(h hit) (tea.Model, tea.Cmd) {
-	if m.mode == modeFocus {
-		return m, nil // already talking to the agent; clicks are not forwarded
-	}
-	// A click answers a pending "press again" like any other key would.
-	m.status, m.notice, m.confirmAll, m.confirmRemove = "", "", false, ""
 	switch h.zone {
 	case zoneList:
 		leftW, _, bodyH := m.geometry()
 		it, ok := m.itemAtLine(leftW, bodyH, h.line)
-		if !ok || it.isHeader() {
+		if !ok {
+			return m, nil
+		}
+		focused := m.mode == modeFocus
+		if it.isHeader() {
+			if focused {
+				return m, nil // a fold would take the selection off the agent
+			}
+			m.clearPrompts()
 			return m.clickNonRow(h.line)
 		}
-		if cur, ok := m.current(m.items()); ok && cur.id == it.id {
-			return m, nil // already on it (a worktree row or one of its children)
+		cur, onIt := m.current(m.items())
+		onIt = onIt && cur.id == it.id
+		if focused && onIt {
+			return m, nil // already talking to it
 		}
-		// moveTo also leaves a header the cursor may have been on.
-		m.moveTo(it)
-		m.scroll = scrollState{}
-		cmd := tea.Batch(m.startPreview(), m.readSelectedGit())
-		return m, cmd
+		m.clearPrompts()
+		m.mode = modeList
+		if !onIt {
+			// moveTo also leaves a header the cursor may have been on.
+			m.moveTo(it)
+			m.scroll = scrollState{}
+		}
+		next, cmd := m.focus()
+		nm := next.(Model) // readSelectedGit marks the read in flight on the model it returns
+		return nm, tea.Batch(cmd, nm.readSelectedGit())
 	case zonePane:
+		if m.mode == modeFocus {
+			return m, nil // already talking to the agent; clicks are not forwarded
+		}
+		m.clearPrompts()
 		return m.focus()
 	}
 	return m, nil
+}
+
+// clearPrompts is what any key does to a pending "press again": a click
+// answers it too.
+func (m *Model) clearPrompts() {
+	m.status, m.notice, m.confirmAll, m.confirmRemove = "", "", false, ""
 }
 
 // clickNonRow handles a click on an org band or a project or group header:

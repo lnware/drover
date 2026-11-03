@@ -39,9 +39,30 @@ func listWidth(total int) int {
 	return min(w, maxListWidth)
 }
 
+// minPaneWidth is the narrowest a chosen list width may leave the right pane.
+const minPaneWidth = 30
+
+// clampListWidth keeps a chosen list width to what a window total columns
+// wide can give: never under minListWidth, and minPaneWidth left for the pane.
+func clampListWidth(w, total int) int {
+	return max(minListWidth, min(w, total-1-minPaneWidth))
+}
+
+// chosenListWidth is the width the user picked: the divider they dragged,
+// else list_width from the config, else 0 for the automatic width.
+func (m Model) chosenListWidth() int {
+	if m.drag.width > 0 {
+		return m.drag.width
+	}
+	return max(m.cfg.ListWidth, 0)
+}
+
 // geometry splits the screen: left list, one separator column, right pane.
 func (m Model) geometry() (leftW, rightW, bodyH int) {
 	leftW = listWidth(m.width)
+	if w := m.chosenListWidth(); w > 0 {
+		leftW = clampListWidth(w, m.width)
+	}
 	return leftW, m.width - leftW - 1, m.height - 2 // title bar and footer
 }
 
@@ -348,7 +369,7 @@ func (m Model) helpLines() []string {
 		{"f1-f9 / ctrl+1-9", "go straight to view 1-9, starting the terminal or editor if needed"},
 		{"PgUp PgDn", "scroll output back (list: also ctrl+u/d)"},
 		{"End q esc", "back to live output"},
-		{"mouse", "click selects/focuses, wheel scrolls"},
+		{"mouse", "click focuses, wheel scrolls, drag the divider to resize (double-click resets)"},
 		{"n", "new worktree in this project"},
 		{"N", "new agent session in this worktree: asks for a name (empty: named after the branch)"},
 		{"/", "search; filters as you type (enter keeps, esc clears)"},
