@@ -39,5 +39,5 @@ func (d Driver) CaptureScroll(name string, off, rows int) (c Capture, hist int, 
 	}
 	// Trailing blank rows were trimmed with the output's final newlines; the
 	// renderer pads, so the capture is just short, not wrong.
-	return Capture{Lines: lines[1:]}, hist, nil
+	return Capture{Lines: expandAll(lines[1:])}, hist, nil
 }
