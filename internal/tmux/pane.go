@@ -35,7 +35,7 @@ func (d Driver) Capture(name string) (Capture, error) {
 		return Capture{}, err
 	}
 	lines := strings.Split(out, "\n")
-	c := Capture{Lines: lines[:len(lines)-1]}
+	c := Capture{Lines: expandAll(lines[:len(lines)-1])}
 	f := strings.Fields(lines[len(lines)-1])
 	if len(f) >= 6 {
 		c.CursorX, _ = strconv.Atoi(f[0])
