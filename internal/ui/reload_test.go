@@ -5,10 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lnware/drover/internal/projects"
 )
 
 func reloadModel(t *testing.T, content string, fixed bool) (Model, string) {
 	t.Helper()
+	t.Setenv("DROVER_STATE_DIR", t.TempDir()) // a reload merges the registered projects
 	t.Cleanup(func() { SetTheme(DefaultTheme) })
 	path := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -124,5 +127,20 @@ func TestEditedConfigIsReloadedButAnEditorErrorIsNot(t *testing.T) {
 	next, _ = m.handleConfigEdited(configEdited{err: os.ErrNotExist})
 	if next.(Model).cfg.Icons == "nerd" || !strings.Contains(next.(Model).status, "editor") {
 		t.Errorf("a failed editor must not reload: %+v", next.(Model).status)
+	}
+}
+
+func TestReloadAddsTheRegisteredProjects(t *testing.T) {
+	m, path := reloadModel(t, "", false)
+	if err := os.WriteFile(path, []byte("projects = [\"/cfg\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg := t.TempDir() // exists on disk, so it is kept
+	if err := projects.Add(reg); err != nil {
+		t.Fatal(err)
+	}
+	m = pressKey(t, m, "R")
+	if len(m.cfg.Projects) != 2 || m.cfg.Projects[0] != "/cfg" || m.cfg.Projects[1] != reg {
+		t.Errorf("projects after reload: %v", m.cfg.Projects)
 	}
 }
